@@ -61,3 +61,4 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+.github/copilot-instructions.md
