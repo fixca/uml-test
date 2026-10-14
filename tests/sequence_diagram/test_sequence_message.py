@@ -1,7 +1,7 @@
 import unittest
 
 from src.sequence_diagram import ActorObject, SequenceMessage, SequenceObject, addMessage, removeMessage
-from src.sequence_diagram.sequence_message import messageQueue #2
+from src.sequence_diagram.sequence_message import messageQueue
 
 
 class SequenceMessageTest(unittest.TestCase):
