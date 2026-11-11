@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant Client
+    participant Server
+    participant DB
+    Client->>Server: Request
+    loop Retry
+        Server->>DB: Query
+        DB-->>Server: Result
+    end
+    Note right of Server: Validate response
+    Server-->>Client: Response

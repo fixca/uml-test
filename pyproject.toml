@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "offline-diagram-editor"
+version = "0.1.0"
+description = "Offline Mermaid class/sequence diagram desktop editor"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["PyQt6>=6.7,<7"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+bundle = ["pyinstaller>=6"]
+
+[project.scripts]
+diagram-editor = "diagram_editor.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -1,0 +1,14 @@
+classDiagram
+    %% Sample class diagram
+    class User {
+        +String name
+        +login()
+    }
+    class AuthService {
+        +verifyToken()
+    }
+    class SessionStore {
+        +save()
+    }
+    User --> AuthService : login
+    AuthService --> SessionStore : persists

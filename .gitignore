@@ -62,3 +62,6 @@ env/
 .DS_Store
 Thumbs.db
 .github/copilot-instructions.md
+
+# AI Prompt
+*.md
