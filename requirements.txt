@@ -1,2 +1,1 @@
-# Project dependencies
-# Add required packages here
+PyQt6==6.7.1
