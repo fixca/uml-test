@@ -1,6 +1,7 @@
 """umlparser.class_parser.parse() 테스트 (B2~B5)."""
 
 import time
+from pathlib import Path
 
 import pytest
 
@@ -111,6 +112,51 @@ def test_comment_and_ignored_statements() -> None:
     d = parse('classDiagram\ndirection LR\n%% class Hidden\nnote for A "x"\nclass A')
     assert d.errors == []
     assert [c.id for c in d.classes] == ["A"]
+
+
+def test_trailing_comment_is_ignored() -> None:
+    d = parse(
+        "class A {\n"
+        "  +make()$   %% static\n"
+        "  +int x     %% 속성\n"
+        "}\n"
+        'A "1" --> "*" B : uses   %% 연관\n'
+        "A <|-- C %% 상속"
+    )
+    assert d.errors == []
+    method = d.classes[0].methods[0]
+    assert (method.returns, method.is_static) == (None, True)
+    assert d.classes[0].attributes[0].name == "x"
+    assert d.relations[0].label == "uses"
+    assert d.relations[1].kind == "inheritance"
+
+
+def test_percent_inside_quotes_is_kept() -> None:
+    d = parse('class A["50%% 할인"]\nA "1%%" --> B')
+    assert d.errors == []
+    assert d.classes[0].name == "50%% 할인"
+    assert d.relations[0].from_multiplicity == "1%%"
+
+
+def test_example_file_parses_without_errors() -> None:
+    path = Path(__file__).parent.parent / "examples" / "class-example.mmd"
+    d = parse(path.read_text(encoding="utf-8"))
+    assert d.errors == []
+    assert [(r.from_, r.kind, r.to) for r in d.relations] == [
+        ("User", "association", "Order"),
+        ("Circle", "inheritance", "Shape"),
+        ("UserRepo", "realization", "Repository"),
+        ("User", "aggregation", "Team"),
+        ("LineItem", "composition", "Order"),
+        ("User", "dependency", "Logger"),
+    ]
+    assert d.relations[0].label == "places"
+    user = d.classes[0]
+    assert [(m.name, m.returns) for m in user.methods] == [
+        ("login", "bool"),
+        ("create", None),
+        ("validate", None),
+    ]
 
 
 def test_empty_code() -> None:

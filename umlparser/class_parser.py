@@ -12,7 +12,8 @@ Mermaid classDiagram 문법을 읽어 `ClassDiagram` 모델로 바꾼다.
   - 메서드 `+find(int id, strict) User` 또는 `+find(id: int): User`
   - 열거형(`enum`)의 괄호 없는 멤버는 값(`values`)이 된다
 - 관계 6종과 양방향 표기, 다중성 `"1"`, 라벨 `: places`
-- `%%` 주석 줄, `direction`·`note`·`style` 등 그림과 무관한 문장은 무시
+- `%%` 주석(줄 전체 또는 줄 끝), `direction`·`note`·`style` 등 그림과 무관한
+  문장은 무시
 
 관계 정규화
 - 화살표 머리(삼각형·마름모·화살촉)가 달린 쪽이 항상 `to`가 된다.
@@ -503,9 +504,21 @@ def _handle_statement(state: _State, text: str, line: int, indent: int) -> None:
     raise _LineError("알 수 없는 문장입니다.")
 
 
+def _strip_comment(raw: str) -> str:
+    """`%%`부터 줄 끝까지를 지운다. `"..."` 따옴표 안의 `%%`는 남긴다."""
+    in_quote = False
+    for i, ch in enumerate(raw):
+        if ch == '"':
+            in_quote = not in_quote
+        elif not in_quote and raw.startswith("%%", i):
+            return raw[:i]
+    return raw
+
+
 def _handle_line(state: _State, raw: str, line: int) -> None:
+    raw = _strip_comment(raw)
     text = raw.strip()
-    if not text or text.startswith("%%"):
+    if not text:
         return
     indent = len(raw) - len(raw.lstrip())
     try:
