@@ -18,7 +18,9 @@ Mermaid classDiagram 문법을 읽어 `ClassDiagram` 모델로 바꾼다.
 - 화살표 머리(삼각형·마름모·화살촉)가 달린 쪽이 항상 `to`가 된다.
   따라서 상속/구현은 `from` = 자식, `to` = 부모이고,
   합성/집합은 `to` = 전체(마름모 쪽)이다.
-- 머리가 없는 `--`, `..`는 `directed=False`이고 쓴 순서대로 `from`, `to`를 정한다.
+- 머리가 없는 `--`, `..`는 쓴 순서대로 `from`, `to`를 정한다.
+- `directed`는 연관/의존 선에 화살촉이 있는지만 뜻한다 (`-->`, `..>`는 True,
+  `--`, `..`는 False). 상속·구현·합성·집합은 모양이 정해져 있어 항상 False다.
 
 오류 처리
 - 잘못된 줄은 건너뛰고 `errors`에 `{line, column, message}`(1부터 셈)를 더한다.
@@ -98,6 +100,9 @@ _ARROWS: dict[str, tuple[RelationKind, str | None]] = {
     "..>": ("dependency", "right"),
     "..": ("dependency", None),
 }
+
+# 화살촉 유무로 방향을 표시하는 관계. 나머지는 머리 모양이 종류 자체를 뜻한다.
+_ARROW_KINDS: tuple[RelationKind, ...] = ("association", "dependency")
 
 _VISIBILITY_CHARS = "+-#~"
 
@@ -414,7 +419,7 @@ def _handle_relation(state: _State, match: re.Match[str], line: int) -> None:
             from_=from_,
             to=to,
             kind=kind,
-            directed=head is not None,
+            directed=kind in _ARROW_KINDS and head is not None,
             from_multiplicity=_blank_to_none(from_mult),
             to_multiplicity=_blank_to_none(to_mult),
             label=_blank_to_none(label),
