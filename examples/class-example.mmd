@@ -1,0 +1,27 @@
+classDiagram
+class User {
+  -id: int
+  +name: string
+  +login(pw: string) bool
+  +create()$          %% static
+  +validate()*        %% abstract
+}
+class Repository~T~ {
+  <<interface>>
+  +find(id: int) T
+}
+class Shape {
+  <<abstract>>
+}
+class Color {
+  <<enumeration>>
+  RED
+  GREEN
+}
+
+User "1" --> "*" Order : places   %% 연관 (+ 다중성, 역할명)
+Shape <|-- Circle                 %% 상속
+Repository <|.. UserRepo          %% 구현
+Team o-- User                     %% 집합
+Order *-- LineItem                %% 합성
+User ..> Logger                   %% 의존
