@@ -140,8 +140,18 @@ def test_methods() -> None:
     repo = by_id(EXAMPLE)["Repository"]
     assert repo.methods == [
         Method("findById", "T", [Param("id", "ID")], "+", False, True, Source(5, 5)),
-        Method("count", "int", [], "+", True, False, Source(6, 6)),
+        Method("count", "int", [], "+", True, True, Source(6, 6)),
     ]
+
+
+def test_interface_methods_are_abstract() -> None:
+    code = (
+        "class Shape {\n+area() double\n<<interface>>\n}\n"
+        "class Box {\n+area() double\n}"
+    )
+    shape, box = parse(code).classes
+    assert shape.methods[0].is_abstract  # 스테레오타입이 아래에 있어도 적용
+    assert not box.methods[0].is_abstract
 
 
 def test_method_param_styles() -> None:

@@ -308,7 +308,10 @@ def _apply_members(draft: _ClassDraft, state: _State) -> None:
         visibility, text = _split_visibility(member.text.strip())
         try:
             if "(" in text:
-                node.methods.append(_parse_method(visibility, text, source))
+                method = _parse_method(visibility, text, source)
+                # 인터페이스의 메서드는 `*`를 적지 않아도 추상이다.
+                method.is_abstract = method.is_abstract or node.kind == "interface"
+                node.methods.append(method)
             elif node.kind == "enum":
                 if not text:
                     raise _LineError("열거값이 비어 있습니다.")
