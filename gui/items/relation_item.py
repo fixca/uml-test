@@ -53,7 +53,7 @@ class RelationLabel(QGraphicsSimpleTextItem):
 
 
 class RelationItem(QGraphicsPathItem):
-    """상속/구현 머리는 to, 집합/합성 마름모는 from_ 쪽에 둔다.
+    """파서가 정규화한 to 쪽에 삼각형·마름모·화살촉을 둔다.
 
     관계선과 라벨은 선택 ID를 갖지 않는다. 클릭 시그널은 F4에서 연결한다.
     """
@@ -103,8 +103,14 @@ class RelationItem(QGraphicsPathItem):
 
         dx = target.center().x() - source.center().x()
         dy = target.center().y() - source.center().y()
-        # 두 박스가 더 멀리 떨어진 축을 기준으로 연결할 면을 고른다.
-        if abs(dx) > abs(dy):
+        # 중심 거리만 보면 넓은 박스의 안쪽으로 선이 되돌아갈 수 있다.
+        # 실제 박스 사이에 빈 공간이 있는 축을 우선해 연결한다.
+        horizontal_gap = (
+            source.right() < target.left() or target.right() < source.left()
+        )
+        vertical_gap = source.bottom() < target.top() or target.bottom() < source.top()
+        use_horizontal = horizontal_gap and (not vertical_gap or abs(dx) > abs(dy))
+        if use_horizontal:
             start = QPointF(
                 source.right() if dx >= 0 else source.left(), source.center().y()
             )
@@ -147,8 +153,8 @@ class RelationItem(QGraphicsPathItem):
         if kind in ("inheritance", "realization"):
             self._head(points[-1], points[-2], "triangle")
         elif kind in ("aggregation", "composition"):
-            self._head(points[0], points[1], "diamond", filled=kind == "composition")
-        elif kind == "dependency" or (kind == "association" and self.relation.directed):
+            self._head(points[-1], points[-2], "diamond", filled=kind == "composition")
+        elif kind in ("association", "dependency") and self.relation.directed:
             self._head(points[-1], points[-2], "open")
 
         self._label(
