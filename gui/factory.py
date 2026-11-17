@@ -1,8 +1,9 @@
 """모델 → 그림 요소 생성. 담당: 이도훈 (F3, F4).
 
-F3: build(scene, diagram, layout)으로 장면을 비우고 다시 그린다.
+F3: build(scene, diagram, layout)으로 정상 모델의 장면을 다시 그린다.
 위치가 없는 클래스는 auto_layout으로 배치한다.
 F4의 상호작용을 scene.signals로 모아 컨트롤러에 전달한다.
+F5: 오류 모델은 마지막 정상 그림과 layout을 유지한다.
 """
 
 from PyQt6.QtCore import QRectF, Qt
@@ -22,6 +23,11 @@ def build(scene: QGraphicsScene, diagram: ClassDiagram, layout: Layout) -> None:
     부분 모델에서 끝점이 없는 관계는 건너뛴다. 마지막 정상 그림의 유지는
     기존 컨트롤러 validate()가 담당한다. 이 함수는 전달된 모델을 그린다.
     """
+    # 오류 모델은 정상 그림과 저장된 배치를 덮어쓰지 않는다.
+    # 컨트롤러도 같은 정책을 쓰지만 직접 호출하는 경우까지 보호한다.
+    if diagram.errors:
+        return
+
     signals = getattr(scene, "signals", None)
     if signals is None:
         signals = DiagramSignals(scene)
