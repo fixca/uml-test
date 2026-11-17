@@ -166,7 +166,7 @@ class Controller(QObject):
         # 원문이 바뀐 뒤에는 과거 정상 모델의 줄 번호를 사용하지 않는다.
         for node in parse(self.project.code).classes:
             if node.id == class_id and node.source:
-                self.editor.goto_line(node.source)
+                self.editor.goto_line(node.source.line)
                 return
 
     def undo(self) -> None:

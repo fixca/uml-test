@@ -5,11 +5,12 @@ static은 밑줄, abstract는 기울임으로 표시한다.
 모델은 읽기만 하며, 위치 저장은 팩토리와 컨트롤러가 담당한다.
 """
 
-from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
 from PyQt6.QtWidgets import (
     QGraphicsItem,
     QGraphicsObject,
+    QGraphicsSceneMouseEvent,
     QStyleOptionGraphicsItem,
     QWidget,
 )
@@ -24,12 +25,18 @@ MIN_SECTION_HEIGHT = 30.0
 class ClassItem(QGraphicsObject):
     """좌표 원점은 박스 왼쪽 위. 모델과 layout을 직접 수정하지 않는다."""
 
+    moved = pyqtSignal(str, float, float)
+    double_clicked = pyqtSignal(str)
+
     def __init__(self, node: ClassNode) -> None:
         super().__init__()
         self.node = node
         # DiagramScene.selected_class_ids()가 읽는 공통 선택 ID.
         self.setData(0, node.id)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
+        self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
+        self.drag_positions: dict[ClassItem, QPointF] = {}
         self.setZValue(1)
         # 실제 글꼴 크기로 박스를 계산해 긴 이름과 멤버가 잘리지 않게 한다.
         self.sections = self._make_sections()
@@ -143,3 +150,31 @@ class ClassItem(QGraphicsObject):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(QColor("#2563eb"), 2))
             painter.drawRect(self.rect)
+
+    def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        """Qt 기본 선택·드래그를 사용하고 이동 전 좌표만 보관한다."""
+        super().mousePressEvent(event)
+        scene = self.scene()
+        self.drag_positions.clear()
+        if scene is not None and event.button() == Qt.MouseButton.LeftButton:
+            for item in scene.selectedItems():
+                if isinstance(item, ClassItem):
+                    self.drag_positions[item] = QPointF(item.pos())
+
+    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        """드래그가 끝났을 때 이동한 클래스만 컨트롤러에 알린다."""
+        super().mouseReleaseEvent(event)
+        moved_items = []
+        for item, original in self.drag_positions.items():
+            if item.pos() != original:
+                moved_items.append((item, item.pos()))
+        self.drag_positions.clear()
+        for item, position in moved_items:
+            item.moved.emit(item.node.id, position.x(), position.y())
+
+    def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            event.accept()
+            self.double_clicked.emit(self.node.id)
+        else:
+            super().mouseDoubleClickEvent(event)
