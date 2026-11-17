@@ -1,4 +1,4 @@
-"""클래스 박스. 담당: 이도훈 (F1).
+"""클래스 박스. 담당: 이도훈 (F1, F4).
 
 이름 / 속성 / 메서드 3단으로 표시한다. enum의 속성 칸에는 값 목록을 넣는다.
 static은 밑줄, abstract는 기울임으로 표시한다.
@@ -25,6 +25,7 @@ MIN_SECTION_HEIGHT = 30.0
 class ClassItem(QGraphicsObject):
     """좌표 원점은 박스 왼쪽 위. 모델과 layout을 직접 수정하지 않는다."""
 
+    # 실제 layout 갱신은 컨트롤러가 맡고, View는 변경 의도만 전달한다.
     moved = pyqtSignal(str, float, float)
     double_clicked = pyqtSignal(str)
 
@@ -36,6 +37,7 @@ class ClassItem(QGraphicsObject):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
+        # 여러 클래스를 함께 옮길 때도 각각의 시작 위치를 비교한다.
         self.drag_positions: dict[ClassItem, QPointF] = {}
         self.setZValue(1)
         # 실제 글꼴 크기로 박스를 계산해 긴 이름과 멤버가 잘리지 않게 한다.
@@ -151,10 +153,13 @@ class ClassItem(QGraphicsObject):
             painter.setPen(QPen(QColor("#2563eb"), 2))
             painter.drawRect(self.rect)
 
+    # ---------------------------------------------------------------- F4 상호작용
+
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         """Qt 기본 선택·드래그를 사용하고 이동 전 좌표만 보관한다."""
         super().mousePressEvent(event)
         scene = self.scene()
+        # Qt의 기본 선택 처리가 끝난 뒤, 이번에 이동할 선택 항목을 저장한다.
         self.drag_positions.clear()
         if scene is not None and event.button() == Qt.MouseButton.LeftButton:
             for item in scene.selectedItems():
@@ -164,15 +169,18 @@ class ClassItem(QGraphicsObject):
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         """드래그가 끝났을 때 이동한 클래스만 컨트롤러에 알린다."""
         super().mouseReleaseEvent(event)
+        # 단순 클릭은 moved를 보내지 않아 불필요한 Undo 기록을 만들지 않는다.
         moved_items = []
         for item, original in self.drag_positions.items():
             if item.pos() != original:
                 moved_items.append((item, item.pos()))
         self.drag_positions.clear()
+        # factory가 이 시그널을 지연 전달하므로 이벤트 도중 장면이 지워지지 않는다.
         for item, position in moved_items:
             item.moved.emit(item.node.id, position.x(), position.y())
 
     def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        """클래스 ID만 전달한다. 원문 줄 찾기와 편집기 이동은 컨트롤러 역할이다."""
         if event.button() == Qt.MouseButton.LeftButton:
             event.accept()
             self.double_clicked.emit(self.node.id)

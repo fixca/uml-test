@@ -1,4 +1,4 @@
-"""모델 → 그림 요소 생성. 담당: 이도훈 (F3, F4).
+"""모델 → 그림 요소 생성. 담당: 이도훈 (F3, F4, F5).
 
 F3: build(scene, diagram, layout)으로 정상 모델의 장면을 다시 그린다.
 위치가 없는 클래스는 auto_layout으로 배치한다.
@@ -20,14 +20,16 @@ from umlparser.storage import Layout
 def build(scene: QGraphicsScene, diagram: ClassDiagram, layout: Layout) -> None:
     """수동 좌표와 scene.signals를 보존하고 누락된 초기 좌표만 채운다.
 
-    부분 모델에서 끝점이 없는 관계는 건너뛴다. 마지막 정상 그림의 유지는
-    기존 컨트롤러 validate()가 담당한다. 이 함수는 전달된 모델을 그린다.
+    errors가 있으면 장면과 layout을 그대로 둔다. 오류가 없는 빈 모델은
+    장면을 비운다. 정상 모델에서 끝점이 없는 관계는 해당 선만 건너뛴다.
+    오류 줄과 상태줄 메시지 표시는 기존 컨트롤러·편집기가 담당한다.
     """
     # 오류 모델은 정상 그림과 저장된 배치를 덮어쓰지 않는다.
     # 컨트롤러도 같은 정책을 쓰지만 직접 호출하는 경우까지 보호한다.
     if diagram.errors:
         return
 
+    # 기존 장면의 시그널 객체를 재사용해 컨트롤러 연결을 유지한다.
     signals = getattr(scene, "signals", None)
     if signals is None:
         signals = DiagramSignals(scene)
@@ -42,6 +44,7 @@ def build(scene: QGraphicsScene, diagram: ClassDiagram, layout: Layout) -> None:
     sizes = {
         key: (item.rect.width(), item.rect.height()) for key, item in nodes.items()
     }
+    # 새 좌표만 layout에 채우고 수동 위치는 보존한다.
     fill_missing_positions(diagram, layout, sizes)
     # 장면 객체 자체는 유지하므로 scene.signals와 컨트롤러 연결도 유지된다.
     scene.clear()
@@ -67,6 +70,7 @@ def build(scene: QGraphicsScene, diagram: ClassDiagram, layout: Layout) -> None:
         # 드래그 중에는 모델이나 layout을 바꾸지 않고 선만 따라 움직인다.
         source_item.xChanged.connect(relation_item.update_geometry)
         source_item.yChanged.connect(relation_item.update_geometry)
+        # 자기 관계는 같은 박스에 중복 연결하지 않는다.
         if target_item is not source_item:
             target_item.xChanged.connect(relation_item.update_geometry)
             target_item.yChanged.connect(relation_item.update_geometry)

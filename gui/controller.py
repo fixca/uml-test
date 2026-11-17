@@ -166,6 +166,7 @@ class Controller(QObject):
         # 원문이 바뀐 뒤에는 과거 정상 모델의 줄 번호를 사용하지 않는다.
         for node in parse(self.project.code).classes:
             if node.id == class_id and node.source:
+                # Source는 위치 객체이므로 편집기에는 정수 줄 번호만 넘긴다.
                 self.editor.goto_line(node.source.line)
                 return
 
