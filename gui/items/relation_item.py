@@ -1,18 +1,26 @@
-"""관계선, 화살표 머리, 다중성 라벨. 담당: 이도훈 (F2).
+"""관계선, 화살표 머리, 다중성 라벨. 담당: 이도훈 (F2, F4).
 
 상속 / 구현 / 연관 / 집합 / 합성 / 의존의 UML 표기를 그린다.
 layout.edges의 모드에 따라 직선 또는 직각 꺾은 선으로 표시한다.
-관계선 클릭과 edge_toggled 시그널 연결은 F4에서 구현한다.
+클릭은 장면의 edge_toggled 시그널로 전달한다.
 """
 
 from itertools import pairwise
 from math import hypot
 
-from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen, QPolygonF
+from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer
+from PyQt6.QtGui import (
+    QColor,
+    QPainter,
+    QPainterPath,
+    QPainterPathStroker,
+    QPen,
+    QPolygonF,
+)
 from PyQt6.QtWidgets import (
     QGraphicsItem,
     QGraphicsPathItem,
+    QGraphicsSceneMouseEvent,
     QGraphicsSimpleTextItem,
     QStyleOptionGraphicsItem,
     QWidget,
@@ -55,7 +63,7 @@ class RelationLabel(QGraphicsSimpleTextItem):
 class RelationItem(QGraphicsPathItem):
     """파서가 정규화한 to 쪽에 삼각형·마름모·화살촉을 둔다.
 
-    관계선과 라벨은 선택 ID를 갖지 않는다. 클릭 시그널은 F4에서 연결한다.
+    관계선과 라벨은 클래스 선택 ID를 갖지 않는다.
     """
 
     def __init__(
@@ -72,11 +80,12 @@ class RelationItem(QGraphicsPathItem):
         self.mode = mode
         # 클래스 박스 뒤에 선을 놓아 박스 내부를 가리지 않게 한다.
         self.setZValue(-1)
-        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
         pen = QPen(INK, 1.4)
         if relation.kind in ("realization", "dependency"):
             pen.setStyle(Qt.PenStyle.DashLine)
         self.setPen(pen)
+        self.pressed = False
         self.decorations: list[QGraphicsItem] = []
         self.update_geometry()
 
@@ -224,3 +233,50 @@ class RelationItem(QGraphicsPathItem):
         item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         item.setPos(center - item.boundingRect().center())
         self.decorations.append(item)
+
+    # ---------------------------------------------------------------- F4 상호작용
+
+    def shape(self) -> QPainterPath:
+        """얇은 선 주변도 클릭할 수 있게 클릭 판정 폭을 넓힌다."""
+        stroker = QPainterPathStroker()
+        stroker.setWidth(10.0)
+        return stroker.createStroke(self.path())
+
+    def boundingRect(self) -> QRectF:
+        """넓힌 클릭 영역이 Qt의 후보 아이템 탐색에서도 포함되도록 한다."""
+        return super().boundingRect().adjusted(-5, -5, 5, 5)
+
+    def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        """왼쪽 클릭만 받는다. 아직 선 모드나 layout은 변경하지 않는다."""
+        self.pressed = event.button() == Qt.MouseButton.LeftButton
+        if self.pressed:
+            event.accept()
+        else:
+            event.ignore()
+
+    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        """선 위에서 눌렀다가 선 위에서 놓은 경우에만 전환을 요청한다."""
+        clicked = self.pressed and self.shape().contains(event.pos())
+        self.pressed = False
+        event.accept()
+        scene = self.scene()
+        if not clicked or scene is None:
+            return
+        signals = getattr(scene, "signals", None)
+        if signals is None:
+            return
+        # 표시 이름이나 관계 ID가 아니라 저장에 쓰이는 layout_key를 전달한다.
+        layout_key = self.relation.layout_key
+
+        def notify_controller() -> None:
+            """현재 마우스 이벤트가 끝난 다음, 아직 유효한 클릭만 전달한다."""
+            # 다른 입력이 먼저 장면을 다시 만들었으면 지난 클릭을 버린다.
+            try:
+                if self.scene() is scene:
+                    signals.edge_toggled.emit(layout_key)
+            except RuntimeError:
+                # scene.clear()로 C++ 아이템이 이미 삭제된 경우다.
+                return
+
+        # 이벤트 처리 중 컨트롤러가 scene.clear()로 자신을 지우지 않게 한다.
+        QTimer.singleShot(0, notify_controller)
