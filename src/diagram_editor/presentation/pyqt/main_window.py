@@ -215,7 +215,7 @@ class ExportDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self, *, new_document=True):
         super().__init__()
-        self.setWindowTitle("Mermaid Diagram Studio · 오프라인")
+        self.setWindowTitle("Mermaid Diagram Studio")
         self.resize(1320, 810)
         self.project_repo = ProjectRepository()
         self.recovery_repo = RecoveryRepository()
