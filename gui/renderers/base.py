@@ -10,6 +10,10 @@ from umlparser.model import ParseError
 from umlparser.storage import Layout
 
 
+class PasteError(ValueError):
+    """붙여넣기를 거부할 때 쓴다. 메시지는 상태줄에 그대로 표시된다."""
+
+
 class Diagram(Protocol):
     """모든 파서 결과가 공통으로 갖는 필드."""
 
@@ -46,3 +50,11 @@ class DiagramRenderer(ABC):
     def source_line(self, diagram: Diagram, node_id: str) -> int | None:
         """더블 클릭 시 이동할 원문 줄 번호."""
         return None
+
+    def copy_block(self, code: str, node_id: str) -> str | None:
+        """node_id의 원문 블록. 복사할 수 없으면 None."""
+        return None
+
+    def paste_block(self, code: str, diagram: Diagram, block: str) -> tuple[str, str]:
+        """block을 code 끝에 붙인 (새 원문, 새 노드 ID). 거부하면 PasteError."""
+        raise PasteError("이 다이어그램에서는 붙여넣기를 지원하지 않습니다.")

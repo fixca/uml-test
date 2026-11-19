@@ -1,6 +1,6 @@
 """다이어그램 종류별 렌더러 등록."""
 
-from gui.renderers.base import Diagram, DiagramRenderer
+from gui.renderers.base import Diagram, DiagramRenderer, PasteError
 from gui.renderers.class_renderer import ClassDiagramRenderer
 from gui.renderers.other_renderer import OtherDiagramRenderer
 
@@ -20,5 +20,6 @@ __all__ = [
     "Diagram",
     "DiagramRenderer",
     "OtherDiagramRenderer",
+    "PasteError",
     "renderer_for",
 ]

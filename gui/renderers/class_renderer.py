@@ -7,7 +7,9 @@ from gui.auto_layout import fill_missing_positions
 from gui.canvas import DiagramSignals
 from gui.items.class_item import ClassItem
 from gui.items.relation_item import RelationItem
-from gui.renderers.base import Diagram, DiagramRenderer
+from gui.renderers.base import Diagram, DiagramRenderer, PasteError
+from umlparser import parse
+from umlparser.edit import append_class, class_block
 from umlparser.model import ClassDiagram
 from umlparser.storage import Layout
 
@@ -94,3 +96,30 @@ class ClassDiagramRenderer(DiagramRenderer):
                 # Source는 위치 객체이므로 정수 줄 번호만 돌려준다.
                 return node.source.line
         return None
+
+    def copy_block(self, code: str, node_id: str) -> str | None:
+        return class_block(code, node_id) or None
+
+    def paste_block(self, code: str, diagram: Diagram, block: str) -> tuple[str, str]:
+        if not isinstance(diagram, ClassDiagram):
+            raise PasteError("이 다이어그램에서는 클래스를 붙여넣을 수 없습니다.")
+        fragment = parse("classDiagram\n" + block)
+        if (
+            fragment.errors
+            or len(fragment.classes) != 1
+            or fragment.relations
+            or fragment.classes[0].implicit
+        ):
+            raise PasteError("클래스 정의 하나만 붙여넣을 수 있습니다.")
+        source_id = fragment.classes[0].id
+        existing = {node.id for node in diagram.classes}
+        number = 2
+        new_id = source_id
+        while new_id in existing:
+            new_id = f"{source_id}{number}"
+            number += 1
+        new_code = append_class(code, block, new_id)
+        candidate = parse(new_code)
+        if candidate.errors or new_id not in {node.id for node in candidate.classes}:
+            raise PasteError("이 클래스 정의는 안전하게 붙여넣을 수 없습니다.")
+        return new_code, new_id

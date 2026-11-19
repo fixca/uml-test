@@ -11,10 +11,8 @@ from PyQt6.QtWidgets import QGraphicsScene
 from gui import factory
 from gui.canvas import DiagramScene, DiagramSignals
 from gui.code_editor import CodeEditor
-from gui.renderers import Diagram, renderer_for
+from gui.renderers import Diagram, PasteError, renderer_for
 from umlparser import parse
-from umlparser.edit import append_class, class_block
-from umlparser.model import ClassDiagram
 from umlparser.storage import Layout, Project
 
 
@@ -195,34 +193,19 @@ class Controller(QObject):
         self.changed.emit()
 
     def copy_class(self, class_id: str) -> str | None:
-        return class_block(self.project.code, class_id) or None
+        # 마지막 정상 모델이 아니라 현재 원문을 기준으로 한다.
+        candidate = parse(self.project.code)
+        return renderer_for(candidate).copy_block(self.project.code, class_id)
 
     def paste_class(self, block: str, position: tuple[float, float]) -> bool:
         if not self.valid or self.diagram is None:
             return False
-        if not isinstance(self.diagram, ClassDiagram):
-            self.status.emit("이 다이어그램에서는 클래스를 붙여넣을 수 없습니다.")
-            return False
-        fragment = parse("classDiagram\n" + block)
-        if (
-            fragment.errors
-            or len(fragment.classes) != 1
-            or fragment.relations
-            or fragment.classes[0].implicit
-        ):
-            self.status.emit("클래스 정의 하나만 붙여넣을 수 있습니다.")
-            return False
-        source_id = fragment.classes[0].id
-        existing = {node.id for node in self.diagram.classes}
-        number = 2
-        new_id = source_id
-        while new_id in existing:
-            new_id = f"{source_id}{number}"
-            number += 1
-        code = append_class(self.project.code, block, new_id)
-        candidate = parse(code)
-        if candidate.errors or new_id not in {node.id for node in candidate.classes}:
-            self.status.emit("이 클래스 정의는 안전하게 붙여넣을 수 없습니다.")
+        try:
+            code, new_id = renderer_for(self.diagram).paste_block(
+                self.project.code, self.diagram, block
+            )
+        except PasteError as error:
+            self.status.emit(str(error))
             return False
         self.project.code = code
         self.project.layout.nodes[new_id] = position
