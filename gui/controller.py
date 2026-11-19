@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import QGraphicsScene
 from gui import factory
 from gui.canvas import DiagramScene, DiagramSignals
 from gui.code_editor import CodeEditor
+from gui.renderers import Diagram, renderer_for
 from umlparser import parse
 from umlparser.edit import append_class, class_block
 from umlparser.model import ClassDiagram
@@ -31,14 +32,14 @@ class Controller(QObject):
         self,
         editor: CodeEditor,
         scene: DiagramScene,
-        builder: Callable[[QGraphicsScene, ClassDiagram, Layout], None] = factory.build,
+        builder: Callable[[QGraphicsScene, Diagram, Layout], None] = factory.build,
     ) -> None:
         super().__init__(editor)
         self.editor = editor
         self.scene = scene
         self.builder = builder
         self.project = Project("", Layout(), None)
-        self.diagram: ClassDiagram | None = None
+        self.diagram: Diagram | None = None
         self.valid = False
         self.rendered = False
         self.history: list[Snapshot] = []
@@ -113,9 +114,11 @@ class Controller(QObject):
             return
         try:
             self.builder(self.scene, self.diagram, self.project.layout)
-        except NotImplementedError:
+        except NotImplementedError as error:
             self.rendered = False
-            self.status.emit("다이어그램 팩토리 구현을 기다리고 있습니다.")
+            self.status.emit(
+                str(error) or "다이어그램 렌더러 구현을 기다리고 있습니다."
+            )
         else:
             self.rendered = True
             if announce:
@@ -144,7 +147,7 @@ class Controller(QObject):
             return
         if not all(math.isfinite(value) for value in (x, y)):
             return
-        if class_id not in {node.id for node in self.diagram.classes}:
+        if class_id not in renderer_for(self.diagram).node_ids(self.diagram):
             return
         self.project.layout.nodes[class_id] = (x, y)
         self.redraw()
@@ -153,7 +156,7 @@ class Controller(QObject):
     def toggle_edge(self, layout_key: str) -> None:
         if not self.valid or self.diagram is None:
             return
-        if layout_key not in {edge.layout_key for edge in self.diagram.relations}:
+        if layout_key not in renderer_for(self.diagram).edge_keys(self.diagram):
             return
         edges = self.project.layout.edges
         edges[layout_key] = (
@@ -164,11 +167,10 @@ class Controller(QObject):
 
     def goto_class(self, class_id: str) -> None:
         # 원문이 바뀐 뒤에는 과거 정상 모델의 줄 번호를 사용하지 않는다.
-        for node in parse(self.project.code).classes:
-            if node.id == class_id and node.source:
-                # Source는 위치 객체이므로 편집기에는 정수 줄 번호만 넘긴다.
-                self.editor.goto_line(node.source.line)
-                return
+        candidate = parse(self.project.code)
+        line = renderer_for(candidate).source_line(candidate, class_id)
+        if line is not None:
+            self.editor.goto_line(line)
 
     def undo(self) -> None:
         if self.timer.isActive():
@@ -197,6 +199,9 @@ class Controller(QObject):
 
     def paste_class(self, block: str, position: tuple[float, float]) -> bool:
         if not self.valid or self.diagram is None:
+            return False
+        if not isinstance(self.diagram, ClassDiagram):
+            self.status.emit("이 다이어그램에서는 클래스를 붙여넣을 수 없습니다.")
             return False
         fragment = parse("classDiagram\n" + block)
         if (
