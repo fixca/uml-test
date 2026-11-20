@@ -105,7 +105,8 @@ class ClassDiagramRenderer(DiagramRenderer):
             raise PasteError("이 다이어그램에서는 클래스를 붙여넣을 수 없습니다.")
         fragment = parse("classDiagram\n" + block)
         if (
-            fragment.errors
+            fragment.type != "class"
+            or fragment.errors
             or len(fragment.classes) != 1
             or fragment.relations
             or fragment.classes[0].implicit

@@ -14,6 +14,7 @@ import re
 
 from umlparser.class_parser import parse
 from umlparser.model import ClassNode
+from umlparser.sections import split_sections
 
 _ID_RE = re.compile(r"^\w+$")
 
@@ -35,6 +36,9 @@ def class_block(code: str, class_id: str) -> str:
     `<<interface>> X` 줄을 모두 포함한다. 관계 줄은 포함하지 않는다.
     클래스가 없거나 관계에서만 쓰인(implicit) 클래스면 빈 문자열을 돌려준다.
     """
+    sections = split_sections(code)
+    if sections is not None:
+        code = sections.class_code
     node = _declared_class(code, class_id)
     if node is None:
         return ""
@@ -82,6 +86,15 @@ def append_class(code: str, block: str, new_id: str) -> str:
     `new_id`가 이름으로 쓸 수 없는 글자면 block의 원래 이름을 기준으로 한다.
     `block`에 선언된 클래스가 없으면(클립보드 내용이 잘못됨) 코드를 그대로 돌려준다.
     """
+    sections = split_sections(code)
+    if sections is not None:
+        if sections.after:
+            return (
+                sections.before
+                + sections.sequence
+                + append_class(sections.after, block, new_id)
+            )
+        return append_class(sections.before, block, new_id) + sections.sequence
     source = _declared_class(block)
     if source is None:
         return code

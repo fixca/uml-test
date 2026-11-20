@@ -1,0 +1,11 @@
+classDiagram
+    class User
+    class Server
+    User --> Server
+
+sequenceDiagram
+    actor User as 사용자
+    participant Server as 서버
+    User->>Server: 로그인 요청
+    Server->>Server: 사용자 조회
+    Server-->>User: 로그인 결과
