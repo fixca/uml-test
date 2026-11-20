@@ -87,9 +87,10 @@ Python 이름은 snake_case(`from_`, `layout_key`), JSON은 class-model.md 이�
 
 ### 5.2 백엔드가 제공하는 함수
 ```python
-umlparser.parse(code: str) -> ClassDiagram           # 오류가 있어도 예외 없이 부분 모델 + errors
+umlparser.parse(code: str) -> ClassDiagram | SequenceDocument           # 오류가 있어도 예외 없이 부분 모델 + errors
 umlparser.edit.class_block(code, class_id) -> str     # 클래스 정의 코드 블록 (복사용, Should)
 umlparser.edit.append_class(code, block, new_id) -> str  # 이름 바꿔 코드 끝에 추가 (붙여넣기용, Should)
+umlparser.edit.reorder_participants(code, order) -> str  # 시퀀스 참여자 선언을 order 순서로 다시 씀 (참여자 드래그용)
 
 @dataclass
 class Layout:
@@ -112,6 +113,7 @@ factory.build(scene, diagram: Diagram, layout: Layout) -> None   # 종류별 렌
 # Diagram = type, errors를 가진 파서 결과. renderers.renderer_for(diagram)이 diagram.type으로 렌더러를 고른다.
 # DiagramRenderer: render(scene, diagram, layout, signals) 필수, node_ids / edge_keys / source_line은 선택(기본 빈 값).
 # 복사/붙여넣기: copy_block(code, node_id) -> str | None, paste_block(code, diagram, block) -> (새 원문, 새 ID)도 선택. 거부하면 PasteError(메시지는 상태줄에 표시).
+# 이동: moved_code(code, diagram, node_id, x, y) -> str | None도 선택. 코드를 고쳐 처리하는 종류(시퀀스 참여자 순서)는 새 코드를, layout 좌표로 저장하는 종류는 None을 돌려준다.
 # 새 종류는 DiagramRenderer를 상속해 gui/renderers/__init__.py의 RENDERERS에 등록한다. 미지원 종류는 NotImplementedError.
 # 그림 요소가 보내는 시그널 (factory가 하나의 DiagramSignals 객체로 모아 줌)
 moved(class_id: str, x: float, y: float)       # 드래그를 놓았을 때

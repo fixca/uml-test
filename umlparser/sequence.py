@@ -13,6 +13,7 @@ class Participant:
     label: str
     kind: str
     line: int
+    implicit: bool = False  # 선언 없이 메시지에서 처음 나온 참여자
 
 
 @dataclass
@@ -57,7 +58,8 @@ def read_sequence(lines: list[tuple[int, str]], document: SequenceDocument) -> N
             sender, arrow, receiver, label = match.groups()
             for name in (sender, receiver):
                 sequence.participants.setdefault(
-                    name, Participant(name, name, "participant", number)
+                    name,
+                    Participant(name, name, "participant", number, implicit=True),
                 )
             sequence.messages.append(Message(sender, arrow, receiver, label))
         else:

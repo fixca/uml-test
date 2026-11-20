@@ -3,7 +3,7 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QGraphicsLineItem
 
@@ -66,10 +66,15 @@ def test_drag_save_undo_and_export(tmp_path: Path) -> None:
     QTest.mouseRelease(window.view.viewport(), Qt.MouseButton.LeftButton, pos=end)
     app.processEvents()
     assert [h.key for h in headers(window)] == ["sequence:API", "sequence:User"]
-    assert controller.project.code == SEQUENCE
+    moved_code = controller.project.code
+    assert list(parse(moved_code).sequence.participants) == ["API", "User"]
+    assert window.editor.toPlainText() == moved_code
+    assert not any(k.startswith("sequence:") for k in controller.project.layout.nodes)
     controller.undo()
+    assert controller.project.code == SEQUENCE
     assert headers(window)[0].key == "sequence:User"
     controller.redo()
+    assert controller.project.code == moved_code
     path = str(tmp_path / "mixed.umlproj")
     save(controller.project, path)
     controller.set_project(load(path))
@@ -112,4 +117,24 @@ def test_mixed_input_keeps_previous_drawing() -> None:
     assert controller.valid is False
     assert not any(isinstance(item, ClassItem) for item in items)
     assert any(isinstance(item, ParticipantItem) for item in items)
+    window.hide()
+
+
+def test_drop_on_same_column_keeps_code_and_history() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(restore_last=False)
+    controller = window.controller
+    controller.set_project(Project(SEQUENCE, Layout(), None))
+    window.show()
+    app.processEvents()
+    first = headers(window)[0]
+    start = window.view.mapFromScene(first.mapToScene(QPointF(0, 22)))
+    length = len(controller.history)
+    QTest.mousePress(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    QTest.mouseMove(window.view.viewport(), start + QPoint(5, 0))
+    QTest.mouseRelease(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    app.processEvents()
+    assert controller.project.code == SEQUENCE
+    assert len(controller.history) == length
+    assert headers(window)[0].key == "sequence:User"
     window.hide()

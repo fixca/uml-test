@@ -12,7 +12,8 @@ from PyQt6.QtWidgets import (
 
 from gui.canvas import DiagramSignals
 from gui.renderers.base import Diagram, DiagramRenderer
-from gui.sequence_order import ordered_ids, participant_key
+from gui.sequence_order import participant_key
+from umlparser.edit import reorder_participants
 from umlparser.sequence import Participant, Sequence, SequenceDocument
 from umlparser.storage import Layout
 
@@ -64,7 +65,6 @@ def draw_sequence(
     scene: QGraphicsScene,
     sequence: Sequence,
     top: float,
-    layout: Layout,
     signals: DiagramSignals,
 ) -> None:
     metrics = QFontMetricsF(scene.font())
@@ -82,8 +82,8 @@ def draw_sequence(
     columns = {}
     dashed = QPen(Qt.GlobalColor.darkGray)
     dashed.setStyle(Qt.PenStyle.DashLine)
-    for index, name in enumerate(ordered_ids(sequence, layout)):
-        participant = sequence.participants[name]
+    # 열 순서는 코드의 참여자 순서(선언 또는 처음 등장한 순서)를 따른다.
+    for index, participant in enumerate(sequence.participants.values()):
         x = width / 2 + index * spacing
         columns[participant.id] = x
         header = ParticipantItem(participant, width, spacing, signals)
@@ -139,5 +139,21 @@ class SequenceRenderer(DiagramRenderer):
         if not isinstance(diagram, SequenceDocument):
             raise TypeError("시퀀스 모델이 필요합니다.")
         scene.clear()
-        draw_sequence(scene, diagram.sequence, 0, layout, signals)
+        draw_sequence(scene, diagram.sequence, 0, signals)
         scene.setSceneRect(scene.itemsBoundingRect().adjusted(-40, -40, 40, 40))
+
+    def moved_code(
+        self, code: str, diagram: Diagram, node_id: str, x: float, y: float
+    ) -> str | None:
+        # 시퀀스에서는 layout에 아무것도 저장하지 않고 코드만 고친다.
+        if not isinstance(diagram, SequenceDocument) or not node_id.startswith(
+            "sequence:"
+        ):
+            return code
+        order = list(diagram.sequence.participants)
+        name = node_id.removeprefix("sequence:")
+        if name not in order:
+            return code
+        order.remove(name)
+        order.insert(max(0, min(round(x), len(order))), name)
+        return reorder_participants(code, order)
