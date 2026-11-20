@@ -23,7 +23,8 @@ def object_states(
     for item in scene.items(Qt.SortOrder.AscendingOrder):
         if isinstance(item, ClassItem):
             states["class", item.node.id] = (
-                item.sections, item.sceneBoundingRect().center()
+                item.sections,
+                item.sceneBoundingRect().center(),
             )
         elif isinstance(item, RelationItem):
             relation = replace(item.relation, id="", source=Source())
