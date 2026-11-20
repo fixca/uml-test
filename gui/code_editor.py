@@ -37,7 +37,7 @@ class CodeEditor(QPlainTextEdit):
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.setUndoRedoEnabled(False)
         self.numbers = LineNumbers(self)
-        self.blockCountChanged.connect(self.update_margin)
+        self.document().blockCountChanged.connect(self.update_margin)
         self.updateRequest.connect(self.update_numbers)
         self.update_margin()
 
@@ -58,6 +58,7 @@ class CodeEditor(QPlainTextEdit):
 
     def update_margin(self, count: int = 0) -> None:
         self.setViewportMargins(self.number_width(), 0, 0, 0)
+        self.update_numbers_geometry()
 
     def update_numbers(self, rect: QRect, dy: int) -> None:
         if dy:
@@ -69,6 +70,9 @@ class CodeEditor(QPlainTextEdit):
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
+        self.update_numbers_geometry()
+
+    def update_numbers_geometry(self) -> None:
         bounds = self.contentsRect()
         self.numbers.setGeometry(
             QRect(bounds.left(), bounds.top(), self.number_width(), bounds.height())
