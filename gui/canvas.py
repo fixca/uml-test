@@ -1,7 +1,7 @@
 """팩토리에 전달할 장면과 공통 상호작용 시그널."""
 
 from PyQt6.QtCore import QObject, QPoint, QPointF, QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtGui import QMouseEvent, QWheelEvent
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView, QWidget
 
 
@@ -67,3 +67,23 @@ class DiagramView(QGraphicsView):
             event.accept()
             return
         super().mouseReleaseEvent(event)
+
+    def zoom_by(self, steps: float, anchor: QPoint | None = None) -> None:
+        current = self.transform().m11()
+        target = max(0.1, min(4.0, current * 1.2 ** max(-32, min(32, steps))))
+        if target == current:
+            return
+        center = self.viewport().rect().center()
+        anchor = center if anchor is None else anchor
+        before = self.mapToScene(anchor)
+        self.scale(target / current, target / current)
+        self.center_canvas(before + (self.mapToScene(center) - self.mapToScene(anchor)))
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        if not event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            super().wheelEvent(event)
+            return
+        delta = event.angleDelta().y() or event.pixelDelta().y()
+        if delta:
+            self.zoom_by(delta / 120, event.position().toPoint())
+        event.accept()

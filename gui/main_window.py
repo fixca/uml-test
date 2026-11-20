@@ -301,12 +301,10 @@ class MainWindow(QMainWindow):
             self.copy_origin = (block, destination)
 
     def zoom_in(self) -> None:
-        if self.view.transform().m11() < 4:
-            self.view.scale(1.2, 1.2)
+        self.view.zoom_by(1)
 
     def zoom_out(self) -> None:
-        if self.view.transform().m11() > 0.1:
-            self.view.scale(1 / 1.2, 1 / 1.2)
+        self.view.zoom_by(-1)
 
     def fit_view(self) -> None:
         if not self.scene.itemsBoundingRect().isEmpty():
