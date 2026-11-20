@@ -37,7 +37,7 @@ DEFAULT_EDGE_STYLE = "straight"
 
 APP_DIR_NAME = "uml-tool"
 SETTINGS_FILE_NAME = "settings.json"
-EXAMPLE_PATH = Path(__file__).resolve().parent.parent / "examples" / "mixed-example.mmd"
+EXAMPLE_PATH = Path(__file__).resolve().parent.parent / "examples" / "class-example.mmd"
 FALLBACK_CODE = "classDiagram\n"
 
 
@@ -62,7 +62,7 @@ class Project:
 
 
 def new_project() -> Project:
-    """예시 코드(examples/mixed-example.mmd)가 든 새 프로젝트.
+    """예시 코드(examples/class-example.mmd)가 든 새 프로젝트.
 
     예시 파일이 없으면 빈 다이어그램으로 시작한다.
     """

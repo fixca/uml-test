@@ -206,7 +206,7 @@ def test_new_project_contains_example_code() -> None:
     example = storage.EXAMPLE_PATH.read_text(encoding="utf-8")
     assert project.code == example
     diagram = parse(project.code)
-    assert diagram.type == "mixed" and not diagram.errors
+    assert diagram.type == "class" and not diagram.errors
     assert diagram.classes and diagram.relations
     assert project.layout == Layout()
     assert project.path is None
