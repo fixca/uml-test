@@ -35,7 +35,7 @@
 ```
 코드 편집기 ──(텍스트)──▶ 컨트롤러 ──parse()──▶ 모델(ClassDiagram)
                             │                         │
-                            └──factory.build(모델, layout)──▶ 캔버스 그림
+                            └──factory.build(모델, layout)──▶ 종류별 렌더러 ──▶ 캔버스 그림
 캔버스 조작(이동·꺾은 선) ──시그널──▶ 컨트롤러 ──▶ layout 수정 → 다시 그림
 ```
 - **Model** = `umlparser` 패키지 (백엔드). PyQt를 import하지 않는다. 단, `export.py`만 예외로 Qt 장면을 받는다.
@@ -58,7 +58,11 @@ uml-tool/
     main_window.py             # 메뉴, 단축키, 분할 화면, 상태줄 (강승현)
     code_editor.py             # 줄 번호, 오류 표시, 줄 이동 (강승현)
     controller.py              # 파싱 디바운스, 다시 그리기, layout 갱신 (강승현)
-    factory.py                 # 모델 → 그림 요소 생성 (이도훈)
+    factory.py                 # 모델 → 종류별 렌더러 호출 (이도훈)
+    renderers/                 # 다이어그램 종류별 렌더러
+      base.py                  #   Diagram, DiagramRenderer 추상 클래스
+      class_renderer.py        #   클래스 다이어그램 렌더러
+      other_renderer.py        #   미지원 종류 안내용 임시 렌더러
     auto_layout.py             # 위치 없는 클래스 자동 배치 (이도훈)
     items/class_item.py        # 클래스 박스 (이도훈)
     items/relation_item.py     # 관계선, 화살표 머리, 다중성 라벨 (이도훈)
@@ -104,7 +108,11 @@ umlparser.export.export_scene(scene, path, fmt, scale=1.0) -> None   # fmt: "svg
 
 ### 5.3 프론트엔드 내부 약속 (이도훈 ↔ 강승현)
 ```python
-factory.build(scene, diagram: ClassDiagram, layout: Layout) -> None   # 장면을 비우고 다시 그림. 위치 없는 클래스는 auto_layout
+factory.build(scene, diagram: Diagram, layout: Layout) -> None   # 종류별 렌더러가 장면을 비우고 다시 그림. 위치 없는 클래스는 auto_layout
+# Diagram = type, errors를 가진 파서 결과. renderers.renderer_for(diagram)이 diagram.type으로 렌더러를 고른다.
+# DiagramRenderer: render(scene, diagram, layout, signals) 필수, node_ids / edge_keys / source_line은 선택(기본 빈 값).
+# 복사/붙여넣기: copy_block(code, node_id) -> str | None, paste_block(code, diagram, block) -> (새 원문, 새 ID)도 선택. 거부하면 PasteError(메시지는 상태줄에 표시).
+# 새 종류는 DiagramRenderer를 상속해 gui/renderers/__init__.py의 RENDERERS에 등록한다. 미지원 종류는 NotImplementedError.
 # 그림 요소가 보내는 시그널 (factory가 하나의 DiagramSignals 객체로 모아 줌)
 moved(class_id: str, x: float, y: float)       # 드래그를 놓았을 때
 double_clicked(class_id: str)
