@@ -12,7 +12,9 @@ from gui import factory
 from gui.canvas import DiagramScene, DiagramSignals
 from gui.code_editor import CodeEditor
 from gui.renderers import Diagram, PasteError, renderer_for
+from gui.sequence_order import reorder
 from umlparser import parse
+from umlparser.sequence import SequenceDocument
 from umlparser.storage import Layout, Project
 
 
@@ -144,6 +146,16 @@ class Controller(QObject):
             self.redraw(announce=False)
             return
         if not all(math.isfinite(value) for value in (x, y)):
+            return
+        if isinstance(self.diagram, SequenceDocument) and class_id.startswith(
+            "sequence:"
+        ):
+            changed = reorder(
+                self.diagram.sequence, self.project.layout, class_id, round(x)
+            )
+            self.redraw()
+            if changed:
+                self.record()
             return
         if class_id not in renderer_for(self.diagram).node_ids(self.diagram):
             return

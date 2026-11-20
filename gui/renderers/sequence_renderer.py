@@ -1,18 +1,38 @@
 """시퀀스 참여자와 메시지의 시간순 배치."""
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPointF, Qt, QTimer
 from PyQt6.QtGui import QBrush, QFontMetricsF, QPen, QPolygonF
-from PyQt6.QtWidgets import QGraphicsRectItem, QGraphicsScene, QGraphicsSimpleTextItem
+from PyQt6.QtWidgets import (
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsSceneMouseEvent,
+    QGraphicsSimpleTextItem,
+)
 
 from gui.canvas import DiagramSignals
 from gui.renderers.base import Diagram, DiagramRenderer
+from gui.sequence_order import ordered_ids, participant_key
 from umlparser.sequence import Participant, Sequence, SequenceDocument
 from umlparser.storage import Layout
 
 
 class ParticipantItem(QGraphicsRectItem):
-    def __init__(self, participant: Participant, width: float) -> None:
+    def __init__(
+        self,
+        participant: Participant,
+        width: float,
+        spacing: float,
+        signals: DiagramSignals,
+    ) -> None:
         super().__init__(-width / 2, 0, width, 44)
+        self.key = participant_key(participant.id)
+        self.spacing = spacing
+        self.first_x = width / 2
+        self.signals = signals
+        self.grab_offset = 0.0
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
+        self.setToolTip("좌우로 드래그하여 참여자 순서를 변경합니다.")
         self.setBrush(QBrush(Qt.GlobalColor.white))
         caption = participant.label
         if participant.kind == "actor":
@@ -21,8 +41,31 @@ class ParticipantItem(QGraphicsRectItem):
         label.setPos(-label.boundingRect().width() / 2, 12)
         self.setZValue(2)
 
+    def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        self.grab_offset = event.scenePos().x() - self.x()
+        self.setCursor(Qt.CursorShape.ClosedHandCursor)
+        event.accept()
 
-def draw_sequence(scene: QGraphicsScene, sequence: Sequence, top: float) -> None:
+    def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        self.setX(event.scenePos().x() - self.grab_offset)
+        event.accept()
+
+    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        x = event.scenePos().x() - self.grab_offset
+        column = round((x - self.first_x) / self.spacing)
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        signals, key = self.signals, self.key
+        QTimer.singleShot(0, lambda: signals.moved.emit(key, float(column), 0.0))
+        event.accept()
+
+
+def draw_sequence(
+    scene: QGraphicsScene,
+    sequence: Sequence,
+    top: float,
+    layout: Layout,
+    signals: DiagramSignals,
+) -> None:
     metrics = QFontMetricsF(scene.font())
     width = max(
         [100.0]
@@ -38,11 +81,12 @@ def draw_sequence(scene: QGraphicsScene, sequence: Sequence, top: float) -> None
     columns = {}
     dashed = QPen(Qt.GlobalColor.darkGray)
     dashed.setStyle(Qt.PenStyle.DashLine)
-    for index, participant in enumerate(sequence.participants.values()):
+    for index, name in enumerate(ordered_ids(sequence, layout)):
+        participant = sequence.participants[name]
         x = width / 2 + index * spacing
         columns[participant.id] = x
         scene.addLine(x, top + 44, x, top + 80 + 64 * len(sequence.messages), dashed)
-        header = ParticipantItem(participant, width)
+        header = ParticipantItem(participant, width, spacing, signals)
         header.setPos(x, top)
         scene.addItem(header)
     for row, message in enumerate(sequence.messages):
@@ -90,5 +134,5 @@ class SequenceRenderer(DiagramRenderer):
         if not isinstance(diagram, SequenceDocument):
             raise TypeError("시퀀스 모델이 필요합니다.")
         scene.clear()
-        draw_sequence(scene, diagram.sequence, 0)
+        draw_sequence(scene, diagram.sequence, 0, layout, signals)
         scene.setSceneRect(scene.itemsBoundingRect().adjusted(-40, -40, 40, 40))

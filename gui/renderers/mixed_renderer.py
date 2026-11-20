@@ -24,5 +24,5 @@ class MixedRenderer(ClassDiagramRenderer):
             raise TypeError("복합 다이어그램 모델이 필요합니다.")
         super().render(scene, diagram, layout, signals)
         top = -180 - 64 * len(diagram.sequence.messages)
-        draw_sequence(scene, diagram.sequence, top)
+        draw_sequence(scene, diagram.sequence, top, layout, signals)
         scene.setSceneRect(scene.itemsBoundingRect().adjusted(-40, -40, 40, 40))
