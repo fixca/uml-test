@@ -5,7 +5,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QGraphicsLineItem
 
 from gui.main_window import MainWindow
 from gui.renderers.sequence_renderer import ParticipantItem
@@ -52,6 +52,12 @@ def test_drag_save_undo_and_export(tmp_path: Path) -> None:
     end = window.view.mapFromScene(second.mapToScene(QPointF(0, 22)))
     position = controller.project.layout.nodes["User"]
     QTest.mousePress(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    midpoint = (start + end) / 2
+    QTest.mouseMove(window.view.viewport(), midpoint)
+    lifeline = next(i for i in first.childItems() if isinstance(i, QGraphicsLineItem))
+    assert first.first_x < first.x() < second.x()
+    assert lifeline.mapToScene(lifeline.line().p1()).x() == first.scenePos().x()
+    assert lifeline.mapToScene(lifeline.line().p2()).x() == first.scenePos().x()
     QTest.mouseMove(window.view.viewport(), end)
     QTest.mouseRelease(window.view.viewport(), Qt.MouseButton.LeftButton, pos=end)
     app.processEvents()

@@ -3,6 +3,7 @@
 from PyQt6.QtCore import QPointF, Qt, QTimer
 from PyQt6.QtGui import QBrush, QFontMetricsF, QPen, QPolygonF
 from PyQt6.QtWidgets import (
+    QGraphicsLineItem,
     QGraphicsRectItem,
     QGraphicsScene,
     QGraphicsSceneMouseEvent,
@@ -85,8 +86,12 @@ def draw_sequence(
         participant = sequence.participants[name]
         x = width / 2 + index * spacing
         columns[participant.id] = x
-        scene.addLine(x, top + 44, x, top + 80 + 64 * len(sequence.messages), dashed)
         header = ParticipantItem(participant, width, spacing, signals)
+        lifeline = QGraphicsLineItem(
+            0, header.rect().bottom(), 0, 80 + 64 * len(sequence.messages), header
+        )
+        lifeline.setPen(dashed)
+        lifeline.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         header.setPos(x, top)
         scene.addItem(header)
     for row, message in enumerate(sequence.messages):
