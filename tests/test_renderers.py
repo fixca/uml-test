@@ -30,7 +30,7 @@ EXAMPLE = Path(__file__).parent.parent / "examples" / "class-example.mmd"
 
 @dataclass
 class FakeDiagram:
-    type: str = "sequence"
+    type: str = "state"
     errors: list[ParseError] = field(default_factory=list)
 
 
@@ -58,7 +58,7 @@ def test_unsupported_type_replaces_scene_with_notice(app: QApplication) -> None:
     assert not any(isinstance(item, ClassItem) for item in items)
     assert len(items) == 1
     assert isinstance(items[0], QGraphicsSimpleTextItem)
-    assert "sequence" in items[0].text()
+    assert "state" in items[0].text()
 
 
 def make_controller(app: QApplication) -> Controller:
@@ -74,7 +74,7 @@ def test_controller_reports_unsupported_type(app: QApplication) -> None:
     controller.status.connect(messages.append)
     controller.redraw()
     assert controller.rendered is False
-    assert any("sequence" in message for message in messages)
+    assert any("state" in message for message in messages)
 
 
 def test_controller_ignores_class_operations_on_other_type(
