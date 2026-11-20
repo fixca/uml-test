@@ -21,8 +21,11 @@ _ID_RE = re.compile(r"^\w+$")
 
 def _declared_class(code: str, class_id: str | None = None) -> ClassNode | None:
     """`class_id`(없으면 첫 번째)인, 코드에 직접 선언된 클래스를 찾는다."""
+    declarations = set(
+        re.findall(r"(?m)^[ \t]*(?:class|<<[^<>\n]+>>)[ \t]+(\w+)", code)
+    )
     for node in parse(code).classes:
-        if node.implicit:
+        if node.implicit or node.id not in declarations:
             continue
         if class_id is None or node.id == class_id:
             return node
