@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from umlparser import storage
+from umlparser import parse, storage
 from umlparser.storage import Layout, Project, StorageError
 
 KOREAN_CODE = (
@@ -205,7 +205,9 @@ def test_new_project_contains_example_code() -> None:
     project = storage.new_project()
     example = storage.EXAMPLE_PATH.read_text(encoding="utf-8")
     assert project.code == example
-    assert project.code.startswith("classDiagram")
+    diagram = parse(project.code)
+    assert diagram.type == "mixed" and not diagram.errors
+    assert diagram.classes and diagram.relations
     assert project.layout == Layout()
     assert project.path is None
 
