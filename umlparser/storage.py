@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from umlparser.class_parser import parse
+from umlparser import parse
 
 FORMAT_VERSION = 1
 FILE_SUFFIX = ".umlproj"

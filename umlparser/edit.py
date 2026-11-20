@@ -5,6 +5,9 @@
 - 붙여넣기: `append_class(code, block, "User")` -> 이름이 겹치면 `User2`,
   `User3`처럼 바꿔 코드 끝에 붙인 새 코드
 
+- 시퀀스 참여자 드래그: `reorder_participants(code, ["B", "A"])` -> 참여자
+  선언 순서를 바꾼 새 코드
+
 코드 위치는 `parse()` 결과의 `source`를 쓰고, 직접 다시 파싱하지 않는다.
 """
 
@@ -12,16 +15,21 @@ from __future__ import annotations
 
 import re
 
+from umlparser import parse as parse_document
 from umlparser.class_parser import parse
 from umlparser.model import ClassNode
+from umlparser.sequence import SequenceDocument
 
 _ID_RE = re.compile(r"^\w+$")
 
 
 def _declared_class(code: str, class_id: str | None = None) -> ClassNode | None:
     """`class_id`(없으면 첫 번째)인, 코드에 직접 선언된 클래스를 찾는다."""
+    declarations = set(
+        re.findall(r"(?m)^[ \t]*(?:class|<<[^<>\n]+>>)[ \t]+(\w+)", code)
+    )
     for node in parse(code).classes:
-        if node.implicit:
+        if node.implicit or node.id not in declarations:
             continue
         if class_id is None or node.id == class_id:
             return node
@@ -94,3 +102,83 @@ def append_class(code: str, block: str, new_id: str) -> str:
         return f"{body}\n"
     separator = "" if code.endswith("\n") else "\n"
     return f"{code}{separator}{body}\n"
+
+
+def _is_header(line: str) -> bool:
+    return line.partition("%%")[0].strip() == "sequenceDiagram"
+
+
+def reorder_participants(code: str, order: list[str]) -> str:
+    """시퀀스 참여자 선언을 order 순서로 다시 쓴 코드.
+
+    바꿀 수 없으면 code를 그대로 돌려준다.
+    """
+    document = parse_document(code)
+    if not isinstance(document, SequenceDocument) or document.type != "sequence":
+        return code
+    if document.errors:
+        return code
+    participants = document.sequence.participants
+    current = list(participants)
+    if len(order) != len(set(order)) or set(order) != set(current) or order == current:
+        return code
+
+    lines = code.splitlines(keepends=True)
+    header = next((i for i, line in enumerate(lines) if _is_header(line)), None)
+    if header is None:
+        return code
+    newline = next(
+        (
+            "\r\n" if line.endswith("\r\n") else "\n"
+            for line in lines
+            if line.endswith("\n")
+        ),
+        "\n",
+    )
+    first_content = next(
+        (
+            line
+            for line in lines[header + 1 :]
+            if line.strip() and not line.strip().startswith("%%")
+        ),
+        None,
+    )
+    indent = "    "
+    if first_content is not None:
+        indent = first_content[: len(first_content) - len(first_content.lstrip())]
+
+    # 선언 줄은 원래 글자 그대로 꺼내고, 암시적 참여자는 새 선언 줄을 만든다.
+    declared: dict[str, str] = {}
+    for participant in participants.values():
+        if participant.implicit:
+            continue
+        index = participant.line - 1
+        if not header < index < len(lines):
+            return code
+        declared[participant.id] = lines[index]
+    removed = {participants[name].line - 1 for name in declared}
+
+    block: list[str] = []
+    for name in order:
+        text = declared.get(name)
+        if text is None:
+            text = f"{indent}participant {name}{newline}"
+        elif not text.endswith(("\n", "\r")):
+            text += newline
+        block.append(text)
+    rest = [line for i, line in enumerate(lines) if i not in removed]
+    result = "".join(rest[: header + 1] + block + rest[header + 1 :])
+
+    # 다시 읽어 순서와 표시 이름이 의도대로가 아니면 원문을 유지한다.
+    check = parse_document(result)
+    if (
+        not isinstance(check, SequenceDocument)
+        or check.errors
+        or list(check.sequence.participants) != order
+        or any(
+            (p.label, p.kind) != (participants[p.id].label, participants[p.id].kind)
+            for p in check.sequence.participants.values()
+        )
+    ):
+        return code
+    return result
