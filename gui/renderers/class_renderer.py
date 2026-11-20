@@ -100,22 +100,23 @@ class ClassDiagramRenderer(DiagramRenderer):
             bounds.adjusted(-40, -40, 40, 40) if nodes else QRectF(0, 0, 80, 80)
         )
 
-        states = object_states(scene)
+        # 객체 변경에 따른 화면 이동은 논의 후 기능 추가 여부를 결정한다.
+        # states = object_states(scene)
         for view in scene.views():
             if not isinstance(view, DiagramView):
                 continue
             if not previous:
                 view.center_canvas(scene.sceneRect().center())
                 continue
-            for key, (appearance, center) in states.items():
-                old = previous.get(key)
-                if (
-                    old is None
-                    or appearance != old[0]
-                    or (key[0] == "class" and center != old[1])
-                ):
-                    view.center_canvas(center)
-                    break
+            # for key, (appearance, center) in states.items():
+            #     old = previous.get(key)
+            #     if (
+            #         old is None
+            #         or appearance != old[0]
+            #         or (key[0] == "class" and center != old[1])
+            #     ):
+            #         view.center_canvas(center)
+            #         break
 
     def node_ids(self, diagram: Diagram) -> set[str]:
         if not isinstance(diagram, ClassDiagram):
