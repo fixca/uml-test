@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QSplitter,
 )
 
-from gui.canvas import DiagramScene
+from gui.canvas import DiagramScene, DiagramView
 from gui.code_editor import CodeEditor
 from gui.controller import Controller
 from umlparser import storage
@@ -59,7 +59,7 @@ class MainWindow(QMainWindow):
         self.resize(1200, 800)
         self.editor = CodeEditor(self)
         self.scene = DiagramScene(self)
-        self.view = QGraphicsView(self.scene, self)
+        self.view = DiagramView(self.scene, self)
         self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.view.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         splitter = QSplitter(Qt.Orientation.Horizontal, self)

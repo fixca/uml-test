@@ -1,7 +1,8 @@
 """팩토리에 전달할 장면과 공통 상호작용 시그널."""
 
-from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtWidgets import QGraphicsScene
+from PyQt6.QtCore import QObject, QPoint, QPointF, QRectF, Qt, pyqtSignal
+from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView, QWidget
 
 
 class DiagramSignals(QObject):
@@ -23,3 +24,46 @@ class DiagramScene(QGraphicsScene):
                 if isinstance(item.data(0), str)
             )
         )
+
+
+class DiagramView(QGraphicsView):
+    def __init__(self, scene: DiagramScene, parent: QWidget | None = None) -> None:
+        super().__init__(scene, parent)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.pan_position: QPoint | None = None
+
+    def center_canvas(self, point: QPointF) -> None:
+        # 화면 여백은 뷰에서만 관리해 내보내는 그림의 크기를 유지한다.
+        visible = self.mapToScene(self.viewport().rect()).boundingRect()
+        margin = QRectF(visible)
+        margin.moveCenter(point)
+        area = self.scene().sceneRect().united(margin.adjusted(-2, -2, 2, 2))
+        self.setSceneRect(area)
+        self.centerOn(point)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self.pan_position = event.position().toPoint()
+            self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self.pan_position is not None:
+            position = event.position().toPoint()
+            center = self.viewport().rect().center()
+            self.center_canvas(self.mapToScene(center + self.pan_position - position))
+            self.pan_position = position
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self.pan_position = None
+            self.viewport().unsetCursor()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
