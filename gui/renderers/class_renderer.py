@@ -1,17 +1,38 @@
 """클래스 다이어그램 렌더러."""
 
-from PyQt6.QtCore import QRectF, Qt
+from dataclasses import replace
+
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtWidgets import QGraphicsScene
 
 from gui.auto_layout import fill_missing_positions
-from gui.canvas import DiagramSignals
+from gui.canvas import DiagramSignals, DiagramView
 from gui.items.class_item import ClassItem
 from gui.items.relation_item import RelationItem
 from gui.renderers.base import Diagram, DiagramRenderer, PasteError
 from umlparser import parse
 from umlparser.edit import append_class, class_block
-from umlparser.model import ClassDiagram
+from umlparser.model import ClassDiagram, Source
 from umlparser.storage import Layout
+
+
+def object_states(
+    scene: QGraphicsScene,
+) -> dict[tuple[str, str], tuple[object, QPointF]]:
+    states = {}
+    for item in scene.items(Qt.SortOrder.AscendingOrder):
+        if isinstance(item, ClassItem):
+            states["class", item.node.id] = (
+                item.sections,
+                item.sceneBoundingRect().center(),
+            )
+        elif isinstance(item, RelationItem):
+            relation = replace(item.relation, id="", source=Source())
+            states["edge", relation.layout_key] = (
+                (relation, item.mode),
+                item.mapToScene(item.path().pointAtPercent(0.5)),
+            )
+    return states
 
 
 class ClassDiagramRenderer(DiagramRenderer):
@@ -45,6 +66,7 @@ class ClassDiagramRenderer(DiagramRenderer):
         # 새 좌표만 layout에 채우고 수동 위치는 보존한다.
         fill_missing_positions(diagram, layout, sizes)
         # 장면 객체 자체는 유지하므로 scene.signals와 컨트롤러 연결도 유지된다.
+        previous = object_states(scene)
         scene.clear()
         for class_id, item in nodes.items():
             item.setPos(*layout.nodes[class_id])
@@ -77,6 +99,24 @@ class ClassDiagramRenderer(DiagramRenderer):
         scene.setSceneRect(
             bounds.adjusted(-40, -40, 40, 40) if nodes else QRectF(0, 0, 80, 80)
         )
+
+        # 객체 변경에 따른 화면 이동은 논의 후 기능 추가 여부를 결정한다.
+        # states = object_states(scene)
+        for view in scene.views():
+            if not isinstance(view, DiagramView):
+                continue
+            if not previous:
+                view.center_canvas(scene.sceneRect().center())
+                continue
+            # for key, (appearance, center) in states.items():
+            #     old = previous.get(key)
+            #     if (
+            #         old is None
+            #         or appearance != old[0]
+            #         or (key[0] == "class" and center != old[1])
+            #     ):
+            #         view.center_canvas(center)
+            #         break
 
     def node_ids(self, diagram: Diagram) -> set[str]:
         if not isinstance(diagram, ClassDiagram):

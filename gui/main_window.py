@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QSplitter,
 )
 
-from gui.canvas import DiagramScene
+from gui.canvas import DiagramScene, DiagramView
 from gui.code_editor import CodeEditor
 from gui.controller import Controller
 from umlparser import storage
@@ -59,7 +59,7 @@ class MainWindow(QMainWindow):
         self.resize(1200, 800)
         self.editor = CodeEditor(self)
         self.scene = DiagramScene(self)
-        self.view = QGraphicsView(self.scene, self)
+        self.view = DiagramView(self.scene, self)
         self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.view.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
@@ -301,12 +301,10 @@ class MainWindow(QMainWindow):
             self.copy_origin = (block, destination)
 
     def zoom_in(self) -> None:
-        if self.view.transform().m11() < 4:
-            self.view.scale(1.2, 1.2)
+        self.view.zoom_by(1)
 
     def zoom_out(self) -> None:
-        if self.view.transform().m11() > 0.1:
-            self.view.scale(1 / 1.2, 1 / 1.2)
+        self.view.zoom_by(-1)
 
     def fit_view(self) -> None:
         if not self.scene.itemsBoundingRect().isEmpty():
