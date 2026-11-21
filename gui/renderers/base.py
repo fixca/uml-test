@@ -51,6 +51,15 @@ class DiagramRenderer(ABC):
         """더블 클릭 시 이동할 원문 줄 번호."""
         return None
 
+    def moved_code(
+        self, code: str, diagram: Diagram, node_id: str, x: float, y: float
+    ) -> str | None:
+        """이동을 코드 수정으로 처리하는 종류면 새 코드를 돌려준다.
+
+        layout 좌표로 저장하는 종류면 None을 돌려준다.
+        """
+        return None
+
     def copy_block(self, code: str, node_id: str) -> str | None:
         """node_id의 원문 블록. 복사할 수 없으면 None."""
         return None

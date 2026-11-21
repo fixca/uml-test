@@ -145,6 +145,19 @@ class Controller(QObject):
             return
         if not all(math.isfinite(value) for value in (x, y)):
             return
+        renderer = renderer_for(self.diagram)
+        code = renderer.moved_code(self.project.code, self.diagram, class_id, x, y)
+        if code is not None:
+            if code == self.project.code:
+                # 변경이 없으면 끌던 상자만 제자리로 돌린다.
+                self.redraw()
+                return
+            self.project.code = code
+            with QSignalBlocker(self.editor):
+                self.editor.setPlainText(code)
+            self.validate()
+            self.record()
+            return
         if class_id not in renderer_for(self.diagram).node_ids(self.diagram):
             return
         self.project.layout.nodes[class_id] = (x, y)
