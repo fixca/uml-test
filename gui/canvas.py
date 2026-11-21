@@ -27,6 +27,8 @@ class DiagramScene(QGraphicsScene):
 
 
 class DiagramView(QGraphicsView):
+    PAN_MARGIN_PX = 64
+
     def __init__(self, scene: DiagramScene, parent: QWidget | None = None) -> None:
         super().__init__(scene, parent)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
@@ -54,7 +56,21 @@ class DiagramView(QGraphicsView):
         if self.pan_position is not None:
             position = event.position().toPoint()
             center = self.viewport().rect().center()
-            self.center_canvas(self.mapToScene(center + self.pan_position - position))
+            target = self.mapToScene(center + self.pan_position - position)
+            viewport = self.viewport().rect()
+            margin = min(
+                self.PAN_MARGIN_PX, viewport.width() / 4, viewport.height() / 4
+            )
+            padding = margin / self.transform().m11()
+            bounds = (
+                self.scene().sceneRect().adjusted(-padding, -padding, padding, padding)
+            )
+            self.center_canvas(
+                QPointF(
+                    max(bounds.left(), min(target.x(), bounds.right())),
+                    max(bounds.top(), min(target.y(), bounds.bottom())),
+                )
+            )
             self.pan_position = position
             event.accept()
             return
