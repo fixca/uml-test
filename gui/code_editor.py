@@ -9,6 +9,8 @@ from PyQt6.QtGui import (
     QPainter,
     QPaintEvent,
     QResizeEvent,
+    QTextCharFormat,
+    QTextCursor,
 )
 from PyQt6.QtWidgets import QPlainTextEdit, QTextEdit, QWidget
 
@@ -107,12 +109,20 @@ class CodeEditor(QPlainTextEdit):
             if not block.isValid():
                 continue
             selection = QTextEdit.ExtraSelection()
-            selection.cursor = self.textCursor()
-            selection.cursor.setPosition(block.position())
-            selection.format.setBackground(QColor("#ffdddd"))
-            selection.format.setProperty(
-                selection.format.Property.FullWidthSelection, True
+            cursor = QTextCursor(block)
+            cursor.movePosition(
+                QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor
             )
+            selection.cursor = cursor
+            selection.format.setUnderlineStyle(
+                QTextCharFormat.UnderlineStyle.WaveUnderline
+            )
+            selection.format.setUnderlineColor(QColor("#d32f2f"))
+            if not cursor.hasSelection():
+                selection.format.setBackground(QColor("#ffdddd"))
+                selection.format.setProperty(
+                    selection.format.Property.FullWidthSelection, True
+                )
             selections.append(selection)
         self.setExtraSelections(selections)
         self.setToolTip("\n".join(f"{e.line}번째 줄: {e.message}" for e in errors))
