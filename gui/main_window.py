@@ -118,6 +118,7 @@ class MainWindow(QMainWindow):
                 self.controller.redo,
             ),
             (edit_menu, "copy", "복사", QKeySequence.StandardKey.Copy, self.copy),
+            (edit_menu, "delete", "삭제", "Delete", self.delete),
             (
                 edit_menu,
                 "paste",
@@ -284,6 +285,14 @@ class MainWindow(QMainWindow):
             QApplication.clipboard().setText(block)
             position = self.controller.project.layout.nodes.get(selected[0], (0.0, 0.0))
             self.copy_origin = (block, position)
+
+    def delete(self) -> None:
+        if self.editor.hasFocus():
+            cursor = self.editor.textCursor()
+            cursor.deleteChar()
+            self.editor.setTextCursor(cursor)
+            return
+        self.controller.delete_selected()
 
     def paste(self) -> None:
         if self.editor.hasFocus():

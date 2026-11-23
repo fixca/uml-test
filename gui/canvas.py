@@ -45,6 +45,7 @@ class DiagramView(QGraphicsView):
         self.centerOn(point)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
         if event.button() == Qt.MouseButton.MiddleButton:
             self.pan_position = event.position().toPoint()
             self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)

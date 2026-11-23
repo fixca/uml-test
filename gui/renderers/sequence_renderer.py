@@ -3,6 +3,7 @@
 from PyQt6.QtCore import QPointF, Qt, QTimer
 from PyQt6.QtGui import QBrush, QFontMetricsF, QPen, QPolygonF
 from PyQt6.QtWidgets import (
+    QGraphicsItem,
     QGraphicsLineItem,
     QGraphicsRectItem,
     QGraphicsScene,
@@ -29,6 +30,9 @@ class ParticipantItem(QGraphicsRectItem):
     ) -> None:
         super().__init__(-width / 2, 0, width, 44)
         self.key = participant_key(participant.id)
+        self.setData(0, self.key)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        self.press_x = 0.0
         self.spacing = spacing
         self.first_x = width / 2
         self.signals = signals
@@ -42,10 +46,13 @@ class ParticipantItem(QGraphicsRectItem):
             caption = f"«actor» {caption}"
         label = QGraphicsSimpleTextItem(caption, self)
         label.setPos(-label.boundingRect().width() / 2, 12)
+        label.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         label.setZValue(2)  # 활성 구간보다 위에 둔다.
         self.setZValue(2)
 
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        super().mousePressEvent(event)
+        self.press_x = event.scenePos().x()
         self.grab_offset = event.scenePos().x() - self.x()
         self.setCursor(Qt.CursorShape.ClosedHandCursor)
         event.accept()
@@ -55,6 +62,11 @@ class ParticipantItem(QGraphicsRectItem):
         event.accept()
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        super().mouseReleaseEvent(event)
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        if abs(event.scenePos().x() - self.press_x) < 1:
+            event.accept()
+            return
         x = event.scenePos().x() - self.grab_offset
         column = round((x - self.first_x) / self.spacing)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
@@ -208,8 +220,12 @@ class SequenceRenderer(DiagramRenderer):
     ) -> None:
         if not isinstance(diagram, SequenceDocument):
             raise TypeError("시퀀스 모델이 필요합니다.")
+        selected = {item.data(0) for item in scene.selectedItems()}
         scene.clear()
         draw_sequence(scene, diagram.sequence, 0, signals)
+        for item in scene.items():
+            if isinstance(item, ParticipantItem):
+                item.setSelected(item.key in selected)
         scene.setSceneRect(scene.itemsBoundingRect().adjusted(-40, -40, 40, 40))
 
     def moved_code(
