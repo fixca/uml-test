@@ -1,6 +1,6 @@
 """줄 번호와 진단을 표시하는 코드 편집기."""
 
-from PyQt6.QtCore import QRect, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QMimeData, QRect, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
     QFontDatabase,
@@ -57,6 +57,29 @@ class CodeEditor(QPlainTextEdit):
             event.accept()
         else:
             super().keyPressEvent(event)
+
+    def insertFromMimeData(self, source: QMimeData) -> None:
+        """붙여넣은 코드가 현재 문장과 합쳐지지 않도록 별도 줄에 삽입한다."""
+        if not source.hasText() or not source.text():
+            return
+        text = source.text().replace("\r\n", "\n").replace("\r", "\n")
+        cursor = self.textCursor()
+        cursor.beginEditBlock()
+        # 선택한 원문도 보존하고 선택 영역의 마지막 줄 다음에 붙인다.
+        cursor.setPosition(cursor.selectionEnd())
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
+        if cursor.block().text().strip():
+            cursor.insertText("\n")
+        else:
+            cursor.movePosition(
+                QTextCursor.MoveOperation.StartOfBlock, QTextCursor.MoveMode.KeepAnchor
+            )
+            cursor.removeSelectedText()
+        cursor.insertText(text.rstrip("\n"))
+        if cursor.atEnd():
+            cursor.insertText("\n")
+        cursor.endEditBlock()
+        self.setTextCursor(cursor)
 
     def update_margin(self, count: int = 0) -> None:
         self.setViewportMargins(self.number_width(), 0, 0, 0)
