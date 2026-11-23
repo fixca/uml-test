@@ -17,6 +17,7 @@ from gui.canvas import DiagramSignals
 from gui.items.relation_item import INK
 from gui.renderers.base import Diagram, DiagramRenderer
 from gui.sequence_order import participant_key
+from gui.theme import canvas_color
 from umlparser.edit import reorder_participants
 from umlparser.sequence import Activation, Participant, Sequence, SequenceDocument
 from umlparser.storage import Layout
@@ -63,7 +64,7 @@ class ParticipantItem(QGraphicsRectItem):
             super().paint(painter, option, widget)
             return
         painter.save()
-        painter.setPen(QPen(INK, 1.6))
+        painter.setPen(QPen(canvas_color(self.scene(), "#334155"), 1.6))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawEllipse(QPointF(0, -35), 7, 7)
         body = QPainterPath(QPointF(0, -28))

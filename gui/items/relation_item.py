@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
 )
 
 from gui.items.class_item import ClassItem
+from gui.theme import apply_item_theme, canvas_color, is_dark
 from umlparser.model import Relation
 
 INK = QColor("#334155")
@@ -60,7 +61,7 @@ class RelationLabel(QGraphicsSimpleTextItem):
         option: QStyleOptionGraphicsItem,
         widget: QWidget | None = None,
     ) -> None:
-        painter.fillRect(self.boundingRect(), QColor("white"))
+        painter.fillRect(self.boundingRect(), canvas_color(self.scene(), "#ffffff"))
         super().paint(painter, option, widget)
 
 
@@ -220,6 +221,9 @@ class RelationItem(QGraphicsPathItem):
             handle.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
             handle.setVisible(self.isSelected())
             self.decorations.append(handle)
+
+        for item in [self, *self.decorations]:
+            apply_item_theme(item, is_dark(self.scene()))
 
     def preview_point(self) -> QPointF | None:
         """저장하지 않은 조절점의 현재 선분 중점."""
