@@ -43,12 +43,13 @@ def test_drag_add_move_undo_save(window: MainWindow, tmp_path: Path) -> None:
     start = window.view.mapFromScene(item.path().pointAtPercent(0.5))
     QTest.mouseClick(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
     QApplication.processEvents()
-    initial = window.controller.project.layout.bends[key]
+    assert key not in window.controller.project.layout.bends
+    assert not window.controller.dirty
     handles = [
         item for item in edge(window).childItems() if isinstance(item, BendHandle)
     ]
     assert len(handles) == 1 and handles[0].isVisible()
-    assert QPointF(*initial[0]) == edge(window).path().pointAtPercent(0.5)
+    assert edge(window).preview_point() == edge(window).path().pointAtPercent(0.5)
     end = start + QPoint(0, 70)
     QTest.mousePress(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
     QTest.mouseMove(window.view.viewport(), end, delay=20)
@@ -69,10 +70,7 @@ def test_drag_add_move_undo_save(window: MainWindow, tmp_path: Path) -> None:
     window.controller.undo()
     assert window.controller.project.layout.bends[key] == points
     window.controller.undo()
-    assert window.controller.project.layout.bends[key] == initial
-    window.controller.undo()
     assert key not in window.controller.project.layout.bends
-    window.controller.redo()
     window.controller.redo()
     path = tmp_path / "bends.umlproj"
     save(window.controller.project, str(path))
@@ -130,11 +128,11 @@ def test_line_drag_requires_handle_and_click_is_idempotent(window: MainWindow) -
     QTest.mouseClick(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
     QApplication.processEvents()
     item = edge(window)
-    assert len(item.bends) == 1
-    assert item.bends[0] == item.path().pointAtPercent(0.5)
+    assert item.bends == []
+    assert item.preview_point() == item.path().pointAtPercent(0.5)
     before = window.controller.snapshot()
     index = window.controller.history_index
-    point = window.view.mapFromScene(item.bends[0])
+    point = window.view.mapFromScene(item.preview_point())
     QTest.mouseClick(window.view.viewport(), Qt.MouseButton.LeftButton, pos=point)
     QApplication.processEvents()
     assert window.controller.snapshot() == before
@@ -165,8 +163,21 @@ def test_split_both_sides_repeatedly(window: MainWindow, tmp_path: Path) -> None
             pos=window.view.mapFromScene(click),
         )
         QApplication.processEvents()
+        assert window.controller.project.layout.bends.get(key, []) == before
+        assert edge(window).preview_point() == midpoint
+        start_point = window.view.mapFromScene(midpoint)
+        end_point = start_point + QPoint(0, 25)
+        QTest.mousePress(
+            window.view.viewport(), Qt.MouseButton.LeftButton, pos=start_point
+        )
+        QTest.mouseMove(window.view.viewport(), end_point, delay=20)
+        QTest.mouseRelease(
+            window.view.viewport(), Qt.MouseButton.LeftButton, pos=end_point
+        )
+        QApplication.processEvents()
+        destination = window.view.mapToScene(end_point)
         expected = before[:]
-        expected.insert(segment, (midpoint.x(), midpoint.y()))
+        expected.insert(segment, (destination.x(), destination.y()))
         assert window.controller.project.layout.bends[key] == expected
     assert len(edge(window).bends) == 5
     before = window.controller.snapshot()
@@ -188,3 +199,32 @@ def test_split_both_sides_repeatedly(window: MainWindow, tmp_path: Path) -> None
     path = tmp_path / "many-bends.umlproj"
     save(window.controller.project, str(path))
     assert load(str(path)).layout.bends == after.layout.bends
+
+
+def test_preview_does_not_change_saved_path_or_history(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    item = edge(window)
+    before = window.controller.snapshot()
+    original_path = item.path()
+    history = window.controller.history_index
+    point = window.view.mapFromScene(original_path.pointAtPercent(0.5))
+    QTest.mouseClick(window.view.viewport(), Qt.MouseButton.LeftButton, pos=point)
+    QApplication.processEvents()
+    assert item.preview_point() is not None
+    assert item.path() == original_path
+    # 드래그했다가 원위치로 돌아오면 확정하지 않는다.
+    QTest.mousePress(window.view.viewport(), Qt.MouseButton.LeftButton, pos=point)
+    QTest.mouseMove(window.view.viewport(), point + QPoint(0, 50), delay=20)
+    QTest.mouseMove(window.view.viewport(), point, delay=20)
+    QTest.mouseRelease(window.view.viewport(), Qt.MouseButton.LeftButton, pos=point)
+    QApplication.processEvents()
+    assert window.controller.snapshot() == before
+    assert window.controller.history_index == history
+    assert not window.controller.dirty
+    assert item.path() == original_path
+    path = tmp_path / "preview.umlproj"
+    save(window.controller.project, str(path))
+    assert not load(str(path)).layout.bends
+    window.scene.clearSelection()
+    assert item.preview_point() is None

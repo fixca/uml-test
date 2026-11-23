@@ -99,8 +99,12 @@ class RelationItem(QGraphicsPathItem):
         self.bends = [QPointF(x, y) for x, y in (bends or [])]
         self.drag_index: int | None = None
         self.dragged = False
+        self.pending_segment: int | None = None
+        self.drag_pending = False
+        self.original_bends: list[QPointF] = []
+        self.original_pending: int | None = None
         self.setToolTip(
-            "선분 클릭: 가운데 점 추가 / 점 드래그: 경유 위치 변경 / 우클릭: 꺾임 제거"
+            "선분 클릭: 임시 점 표시 / 점 드래그: 경유 위치 변경 / 우클릭: 꺾임 제거"
         )
         # 클래스 박스 뒤에 선을 놓아 박스 내부를 가리지 않게 한다.
         self.setZValue(-1)
@@ -203,7 +207,11 @@ class RelationItem(QGraphicsPathItem):
         self._multiplicity(self.relation.from_multiplicity, points[0], self.source)
         self._multiplicity(self.relation.to_multiplicity, points[-1], self.target)
         self._label(self.relation.label, self._midpoint(points) + QPointF(0, -14))
-        for point in self.bends:
+        handle_points = list(self.bends)
+        preview = self.preview_point()
+        if preview is not None:
+            handle_points.append(preview)
+        for point in handle_points:
             handle = BendHandle(-6, -6, 12, 12, self)
             handle.setPos(point)
             handle.setPen(QPen(QColor("#2563eb"), 1.5))
@@ -213,13 +221,23 @@ class RelationItem(QGraphicsPathItem):
             handle.setVisible(self.isSelected())
             self.decorations.append(handle)
 
+    def preview_point(self) -> QPointF | None:
+        """저장하지 않은 조절점의 현재 선분 중점."""
+        if self.pending_segment is None:
+            return None
+        route = self._route()
+        index = self.pending_segment
+        if index + 1 >= len(route):
+            return None
+        return (route[index] + route[index + 1]) / 2
+
     def itemChange(
         self, change: QGraphicsItem.GraphicsItemChange, value: object
     ) -> object:
         if change == QGraphicsItem.GraphicsItemChange.ItemSelectedHasChanged:
-            for item in self.decorations:
-                if isinstance(item, BendHandle):
-                    item.setVisible(bool(value))
+            if not value:
+                self.pending_segment = None
+            self.update_geometry()
         return super().itemChange(change, value)
 
     def _head(
@@ -316,6 +334,9 @@ class RelationItem(QGraphicsPathItem):
         if self.isSelected():
             for point in self.bends:
                 shape.addEllipse(point, 8, 8)
+            preview = self.preview_point()
+            if preview is not None:
+                shape.addEllipse(preview, 8, 8)
         return shape
 
     def boundingRect(self) -> QRectF:
@@ -336,6 +357,15 @@ class RelationItem(QGraphicsPathItem):
                 ),
                 None,
             )
+            preview = self.preview_point()
+            self.drag_pending = (
+                self.drag_index is None
+                and self.isSelected()
+                and preview is not None
+                and hypot((preview - event.pos()).x(), (preview - event.pos()).y()) <= 8
+            )
+            self.original_bends = [QPointF(point) for point in self.bends]
+            self.original_pending = self.pending_segment
             self.setSelected(True)
             event.accept()
         else:
@@ -345,7 +375,7 @@ class RelationItem(QGraphicsPathItem):
         if not self.pressed:
             event.ignore()
             return
-        if self.drag_index is None:
+        if self.drag_index is None and not self.drag_pending:
             event.accept()
             return
         distance = (
@@ -354,6 +384,15 @@ class RelationItem(QGraphicsPathItem):
         if distance < QApplication.startDragDistance():
             event.accept()
             return
+        if self.drag_pending:
+            route = self._route()
+            self.drag_index = self.pending_segment
+            if self.drag_index is None:
+                return
+            self.bends = [QPointF(point) for point in route[1:-1]]
+            self.bends.insert(self.drag_index, event.pos())
+            self.pending_segment = None
+            self.drag_pending = False
         self.dragged = True
         self.bends[self.drag_index] = event.pos()
         self.update_geometry()
@@ -416,6 +455,7 @@ class RelationItem(QGraphicsPathItem):
         else:
             event.accept()
             return
+        self.pending_segment = None
         self.update_geometry()
         self._notify_bends()
         event.accept()
@@ -423,6 +463,16 @@ class RelationItem(QGraphicsPathItem):
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         """클릭은 가운데 조절점을 만들고, 점 드래그는 경유 위치를 저장한다."""
         if self.pressed and self.drag_index is not None and self.dragged:
+            if event.screenPos() == event.buttonDownScreenPos(
+                Qt.MouseButton.LeftButton
+            ):
+                self.bends = self.original_bends
+                self.pending_segment = self.original_pending
+                self.pressed = False
+                self.drag_index = None
+                self.update_geometry()
+                event.accept()
+                return
             self.bends[self.drag_index] = event.pos()
             self.update_geometry()
             self.pressed = False
@@ -446,9 +496,5 @@ class RelationItem(QGraphicsPathItem):
             range(len(route) - 1),
             key=lambda i: self._segment_distance(event.pos(), route[i], route[i + 1]),
         )
-        midpoint = (route[index] + route[index + 1]) / 2
-        self.bends = [QPointF(point) for point in route[1:-1]]
-        if midpoint not in self.bends:
-            self.bends.insert(index, midpoint)
+        self.pending_segment = index
         self.update_geometry()
-        self._notify_bends()

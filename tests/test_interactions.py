@@ -95,6 +95,13 @@ def test_edge_click_can_rebuild_scene(app: QApplication, canvas: tuple) -> None:
     point = view.mapFromScene(edge.path().pointAtPercent(0.5) + QPointF(0, 3))
     QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=point)
     app.processEvents()
+    assert len(bent) == 0
+    handle = view.mapFromScene(edge.preview_point())
+    destination = handle + QPoint(0, 35)
+    QTest.mousePress(view.viewport(), Qt.MouseButton.LeftButton, pos=handle)
+    QTest.mouseMove(view.viewport(), destination, delay=20)
+    QTest.mouseRelease(view.viewport(), Qt.MouseButton.LeftButton, pos=destination)
+    app.processEvents()
     assert len(bent) == 1
     assert bent[0][0] == "A->B"
     assert len(layout.bends["A->B"]) == 1
