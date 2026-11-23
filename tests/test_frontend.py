@@ -293,3 +293,20 @@ def test_cancel_save_preserves_document(app: QApplication) -> None:
     assert window.editor.toPlainText() == before
     window.controller.mark_saved("test.umlproj")
     window.close()
+
+
+def test_implicit_object_copy_paste_history(controller: Controller) -> None:
+    controller.set_project(Project("classDiagram\nA --> B\n", Layout(), None))
+    original = controller.snapshot()
+    block = controller.copy_class("A")
+    assert block == "class A"
+    assert controller.paste_class(block, (30, 40))
+    assert controller.project.layout.nodes["A2"] == (30, 40)
+    assert len(controller.diagram.relations) == 1
+    assert controller.paste_class(block, (60, 80))
+    assert controller.project.layout.nodes["A3"] == (60, 80)
+    controller.undo()
+    controller.undo()
+    assert controller.snapshot() == original
+    controller.redo()
+    assert "class A2" in controller.project.code
