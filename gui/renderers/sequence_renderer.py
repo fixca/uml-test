@@ -11,10 +11,11 @@ from PyQt6.QtWidgets import (
 )
 
 from gui.canvas import DiagramSignals
+from gui.items.relation_item import INK
 from gui.renderers.base import Diagram, DiagramRenderer
 from gui.sequence_order import participant_key
 from umlparser.edit import reorder_participants
-from umlparser.sequence import Participant, Sequence, SequenceDocument
+from umlparser.sequence import Activation, Participant, Sequence, SequenceDocument
 from umlparser.storage import Layout
 
 
@@ -41,6 +42,7 @@ class ParticipantItem(QGraphicsRectItem):
             caption = f"«actor» {caption}"
         label = QGraphicsSimpleTextItem(caption, self)
         label.setPos(-label.boundingRect().width() / 2, 12)
+        label.setZValue(2)  # 활성 구간보다 위에 둔다.
         self.setZValue(2)
 
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
@@ -59,6 +61,59 @@ class ParticipantItem(QGraphicsRectItem):
         signals, key = self.signals, self.key
         QTimer.singleShot(0, lambda: signals.moved.emit(key, float(column), 0.0))
         event.accept()
+
+
+ACTIVATION_WIDTH = 10.0
+ACTIVATION_STEP = 5.0
+
+
+class ActivationItem(QGraphicsRectItem):
+    """생명선 위의 활성 구간. 머리 상자의 자식이라 드래그에 함께 움직인다."""
+
+    def __init__(
+        self,
+        activation: Activation,
+        top: float,
+        bottom: float,
+        parent: QGraphicsRectItem,
+    ) -> None:
+        left = -ACTIVATION_WIDTH / 2 + activation.depth * ACTIVATION_STEP
+        super().__init__(left, top, ACTIVATION_WIDTH, bottom - top, parent)
+        self.activation = activation
+        self.setBrush(QBrush(Qt.GlobalColor.white))
+        self.setPen(QPen(INK, 1.4))
+        self.setZValue(1)  # 생명선 위, 머리 글자 아래
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+
+
+def is_closed(sequence: Sequence, activation: Activation) -> bool:
+    """끝 메시지에서 실제로 `-`로 닫힌 구간인지(닫히지 않은 구간은 마지막에서 끝남)."""
+    last = len(sequence.messages) - 1
+    if activation.end < last:
+        return True
+    message = sequence.messages[activation.end]
+    if not message.deactivate or message.sender != activation.participant:
+        return False
+    # 마지막 메시지가 닫는 구간은 같은 끝 순번 중 가장 깊은 구간이다.
+    deepest = max(
+        a.depth
+        for a in sequence.activations
+        if a.participant == activation.participant and a.end == last
+    )
+    return activation.depth == deepest
+
+
+def edge_offset(sequence: Sequence, name: str, index: int, toward_right: bool) -> float:
+    """메시지 순번에 name이 활성 중이면 선이 닿을 활성 사각형 바깥 변의 x 오프셋."""
+    depths = [
+        a.depth
+        for a in sequence.activations
+        if a.participant == name and a.start <= index <= a.end
+    ]
+    if not depths:
+        return 0.0
+    reach = ACTIVATION_WIDTH / 2 + max(depths) * ACTIVATION_STEP
+    return reach if toward_right else -reach
 
 
 def draw_sequence(
@@ -93,9 +148,24 @@ def draw_sequence(
         lifeline.setPen(dashed)
         lifeline.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         header.setPos(x, top)
+        for activation in sequence.activations:
+            if activation.participant != participant.id:
+                continue
+            # 머리 상자 기준 좌표. 메시지 y는 top + 84 + 64 * 순번이다.
+            first = 84 + 64 * activation.start
+            last = 84 + 64 * activation.end
+            if not is_closed(sequence, activation):
+                last += 20
+            ActivationItem(activation, first, last, header)
         scene.addItem(header)
     for row, message in enumerate(sequence.messages):
         start, end = columns[message.sender], columns[message.receiver]
+        if start != end:
+            # 활성 중인 쪽은 생명선 중심이 아니라 활성 사각형의 바깥 변에서 만난다.
+            # 방향은 두 생명선의 원래 위치로 정한다.
+            rightward = end > start
+            start += edge_offset(sequence, message.sender, row, rightward)
+            end += edge_offset(sequence, message.receiver, row, not rightward)
         y = top + 84 + 64 * row
         pen = dashed if message.arrow.startswith("--") else QPen(Qt.GlobalColor.black)
         if start == end:
