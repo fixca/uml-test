@@ -96,7 +96,9 @@ class ViewTests(unittest.TestCase):
                         if isinstance(item, RelationItem)
                     )
                     self.assertIsNone(edge.data(0))
-                    self.assertEqual(len(edge.decorations), 4)
+                    # 라벨 3개 + 머리. 방향 있는 집합·합성은 머리가 2개다.
+                    heads = 2 if kind in ("aggregation", "composition") else 1
+                    self.assertEqual(len(edge.decorations), 3 + heads)
                     if mode == "orthogonal":
                         path = edge.path()
                         for i in range(1, path.elementCount()):

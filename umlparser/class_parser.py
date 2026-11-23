@@ -11,7 +11,7 @@ Mermaid classDiagram 문법을 읽어 `ClassDiagram` 모델로 바꾼다.
   - 속성 `+String name` 또는 `+name: String`
   - 메서드 `+find(int id, strict) User` 또는 `+find(id: int): User`
   - 열거형(`enum`)의 괄호 없는 멤버는 값(`values`)이 된다
-- 관계 6종과 양방향 표기, 다중성 `"1"`, 라벨 `: places`
+- 관계 6종과 양방향 표기, 방향 있는 집합 `o-->`/`<--o`, 다중성 `"1"`, 라벨 `: places`
 - `%%` 주석(줄 전체 또는 줄 끝), `direction`·`note`·`style` 등 그림과 무관한
   문장은 무시
 
@@ -20,8 +20,11 @@ Mermaid classDiagram 문법을 읽어 `ClassDiagram` 모델로 바꾼다.
   따라서 상속/구현은 `from` = 자식, `to` = 부모이고,
   합성/집합은 `to` = 전체(마름모 쪽)이다.
 - 머리가 없는 `--`, `..`는 쓴 순서대로 `from`, `to`를 정한다.
-- `directed`는 연관/의존 선에 화살촉이 있는지만 뜻한다 (`-->`, `..>`는 True,
-  `--`, `..`는 False). 상속·구현·합성·집합은 모양이 정해져 있어 항상 False다.
+- `directed`는 화살촉이 있는지를 뜻한다.
+  - 연관/의존: `to` 쪽 화살촉 (`-->`, `..>`는 True, `--`, `..`는 False).
+  - 집합/합성: 마름모 반대쪽(`from`) 끝의 열린 화살촉. `o-->`, `<--o`만 True이고
+    `o--`, `--o`, `*--`, `--*`는 False다. (`*-->` 등 다른 조합은 지원하지 않는다.)
+  - 상속/구현: 모양이 정해져 있어 항상 False다.
 
 오류 처리
 - 잘못된 줄은 건너뛰고 `errors`에 `{line, column, message}`(1부터 셈)를 더한다.
@@ -94,6 +97,8 @@ _ARROWS: dict[str, tuple[RelationKind, str | None]] = {
     "--*": ("composition", "right"),
     "o--": ("aggregation", "left"),
     "--o": ("aggregation", "right"),
+    "o-->": ("aggregation", "left"),
+    "<--o": ("aggregation", "right"),
     "<--": ("association", "left"),
     "-->": ("association", "right"),
     "--": ("association", None),
@@ -104,6 +109,9 @@ _ARROWS: dict[str, tuple[RelationKind, str | None]] = {
 
 # 화살촉 유무로 방향을 표시하는 관계. 나머지는 머리 모양이 종류 자체를 뜻한다.
 _ARROW_KINDS: tuple[RelationKind, ...] = ("association", "dependency")
+
+# 마름모와 열린 화살촉이 함께 있는 표기. 화살촉은 마름모 반대쪽 끝에 있다.
+_NAVIGABLE_ARROWS: frozenset[str] = frozenset({"o-->", "<--o"})
 
 _VISIBILITY_CHARS = "+-#~"
 
@@ -423,7 +431,8 @@ def _handle_relation(state: _State, match: re.Match[str], line: int) -> None:
             from_=from_,
             to=to,
             kind=kind,
-            directed=kind in _ARROW_KINDS and head is not None,
+            directed=(kind in _ARROW_KINDS and head is not None)
+            or arrow in _NAVIGABLE_ARROWS,
             from_multiplicity=_blank_to_none(from_mult),
             to_multiplicity=_blank_to_none(to_mult),
             label=_blank_to_none(label),

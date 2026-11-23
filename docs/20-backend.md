@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | B1 | 모델 `model.py` | 11/11 | High | class-model.md의 모든 필드를 dataclass로. `to_dict()` 결과가 [class-example.json](../backend/class-example.json)과 같음. `from_dict()` 왕복 테스트. 오늘 중 커밋(프론트가 바로 씀) |
 | B2 | 클래스 선언 파싱 `class_parser.py` | 11/13 | High | `class X { ... }`, 제네릭 `~T~`, `<<interface>>`/`<<abstract>>`/`<<enumeration>>`, 속성·메서드(가시성, 타입, 파라미터, `$` static, `*` abstract), enum 값, `%%` 주석. 모든 요소에 `source {line, endLine}` |
-| B3 | 관계 파싱 | 11/13 | High | 6종 화살표 양방향 표기, 상속/구현은 from=자식으로 정규화, 다중성 `"1"`, label `: places`, `directed`, `layout_key`(`from->to`, 중복은 `#2`), 선언 없는 클래스는 `implicit=True`로 자동 생성 |
+| B3 | 관계 파싱 | 11/13 | High | 6종 화살표 양방향 표기, 상속/구현은 from=자식으로 정규화, 다중성 `"1"`, label `: places`, `o-->`/`<--o`(방향 있는 집합), `directed`, `layout_key`(`from->to`, 중복은 `#2`), 선언 없는 클래스는 `implicit=True`로 자동 생성 |
 | B4 | 오류 처리 | 11/14 | High | 잘못된 줄은 건너뛰고 `errors`에 `{line, column, message}` 추가, 나머지는 정상 파싱. 예외를 밖으로 던지지 않음. 메시지는 한국어 |
 | B5 | 성능 확인 | 11/14 | Medium | 클래스 30개·관계 40개 코드 파싱 10ms 이하 (테스트로 측정) |
 | B6 | 편집 헬퍼 `edit.py` | 11/16 | Low (Should) | `class_block()`, `append_class()` (이름 충돌 시 `User2`, `User3`) |

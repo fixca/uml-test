@@ -295,3 +295,14 @@ def test_model_error_is_value_error() -> None:
 def test_model_error_message_shows_where() -> None:
     with pytest.raises(ModelError, match=r"classes\[1\]\.kind"):
         ClassDiagram.from_dict({"classes": [{"id": "A"}, {"id": "B", "kind": "bad"}]})
+
+
+def test_directed_aggregation_round_trip() -> None:
+    diagram = ClassDiagram(
+        classes=[ClassNode("A", "A"), ClassNode("B", "B")],
+        relations=[Relation("r1", "B", "A", "aggregation", directed=True)],
+    )
+    restored = round_trip(diagram)
+    assert restored.relations[0].kind == "aggregation"
+    assert restored.relations[0].directed is True
+    assert restored == diagram
