@@ -27,9 +27,9 @@ def test_class_block_collects_lines_outside_block() -> None:
     assert class_block(CODE, "Shape") == "<<interface>> Shape\nShape : +area() double"
 
 
-def test_class_block_missing_or_implicit_is_empty() -> None:
+def test_class_block_missing_is_empty_and_implicit_is_declaration() -> None:
     assert class_block(CODE, "Nope") == ""
-    assert class_block(CODE, "Order") == ""
+    assert class_block(CODE, "Order") == "class Order"
 
 
 # ---------------------------------------------------------------- unique_class_id
@@ -97,3 +97,18 @@ def test_append_class_invalid_block_keeps_code() -> None:
 def test_append_class_invalid_new_id_uses_block_name() -> None:
     new_code = append_class(CODE, "class Item", "잘못된 이름!")
     assert new_code.endswith("class Item\n")
+
+
+def test_implicit_copy_paste_keeps_original_relations() -> None:
+    block = class_block(CODE, "Order")
+    copied = append_class(CODE, block, "Order")
+    diagram = parse(copied)
+    assert not diagram.errors
+    assert copied.startswith(CODE)
+    assert len(diagram.relations) == len(parse(CODE).relations)
+    assert next(node for node in diagram.classes if node.id == "Order").implicit
+    assert not next(node for node in diagram.classes if node.id == "Order2").implicit
+
+
+def test_invalid_implicit_copy_is_empty() -> None:
+    assert class_block("classDiagram\nA --> B\ninvalid !", "A") == ""

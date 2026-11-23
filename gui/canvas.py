@@ -9,6 +9,7 @@ class DiagramSignals(QObject):
     moved = pyqtSignal(str, float, float)
     double_clicked = pyqtSignal(str)
     edge_toggled = pyqtSignal(str)
+    edge_bent = pyqtSignal(str, object)
 
 
 class DiagramScene(QGraphicsScene):
@@ -45,6 +46,7 @@ class DiagramView(QGraphicsView):
         self.centerOn(point)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
         if event.button() == Qt.MouseButton.MiddleButton:
             self.pan_position = event.position().toPoint()
             self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)

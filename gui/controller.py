@@ -13,6 +13,8 @@ from gui.canvas import DiagramScene, DiagramSignals
 from gui.code_editor import CodeEditor
 from gui.renderers import Diagram, PasteError, renderer_for
 from umlparser import parse
+from umlparser.model import ClassDiagram
+from umlparser.sequence import SequenceDocument
 from umlparser.storage import Layout, Project
 
 
@@ -55,6 +57,7 @@ class Controller(QObject):
     def bind_signals(self, signals: DiagramSignals) -> None:
         signals.moved.connect(self.move_node)
         signals.edge_toggled.connect(self.toggle_edge)
+        signals.edge_bent.connect(self.bend_edge)
         signals.double_clicked.connect(self.goto_class)
 
     def snapshot(self) -> Snapshot:
@@ -169,10 +172,40 @@ class Controller(QObject):
             return
         if layout_key not in renderer_for(self.diagram).edge_keys(self.diagram):
             return
+        self.project.layout.bends.pop(layout_key, None)
         edges = self.project.layout.edges
         edges[layout_key] = (
             "straight" if edges.get(layout_key) == "orthogonal" else "orthogonal"
         )
+        self.redraw()
+        self.record()
+
+    def bend_edge(self, layout_key: str, points: object) -> None:
+        if not self.valid or self.diagram is None:
+            self.redraw(announce=False)
+            return
+        if layout_key not in renderer_for(self.diagram).edge_keys(self.diagram):
+            return
+        if not isinstance(points, list) or any(
+            not isinstance(point, tuple | list)
+            or len(point) != 2
+            or not all(
+                isinstance(value, int | float)
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+                for value in point
+            )
+            for point in points
+        ):
+            self.status.emit("꺾임 좌표가 올바르지 않습니다.")
+            self.redraw(announce=False)
+            return
+        if points:
+            self.project.layout.bends[layout_key] = [
+                (float(x), float(y)) for x, y in points
+            ]
+        else:
+            self.project.layout.bends.pop(layout_key, None)
         self.redraw()
         self.record()
 
@@ -227,3 +260,108 @@ class Controller(QObject):
         self.validate()
         self.record()
         return True
+
+    def delete_selected(self) -> None:
+        """기존 파서로 문장 단위를 확인해 선택 노드와 연결을 한 번에 지운다."""
+        selected = set(self.scene.selected_class_ids())
+        if not selected or not self.valid or self.diagram is None:
+            return
+        self.flush()
+        original = parse(self.project.code)
+        sequence = isinstance(original, SequenceDocument)
+        names = (
+            {key.removeprefix("sequence:") for key in selected}
+            if sequence
+            else selected
+        )
+        kept: list[str] = []
+        chunk = ""
+        active: dict[str, int] = {}
+        for line in self.project.code.splitlines(keepends=True):
+            chunk += line
+            statement = parse("sequenceDiagram\n" + chunk) if sequence else parse(chunk)
+            if sequence and isinstance(statement, SequenceDocument):
+                involved = set(statement.sequence.participants)
+            else:
+                # 닫히지 않은 클래스 블록은 파서가 완성된 모델을 줄 때까지 모은다.
+                if statement.errors:
+                    continue
+                involved = {node.id for node in statement.classes}
+            if not involved & names:
+                if sequence and isinstance(statement, SequenceDocument):
+                    for message in statement.sequence.messages:
+                        if message.activate:
+                            active[message.receiver] = (
+                                active.get(message.receiver, 0) + 1
+                            )
+                        elif message.deactivate:
+                            depth = active.get(message.sender, 0)
+                            if depth:
+                                active[message.sender] = depth - 1
+                            else:
+                                # 시작 메시지가 삭제된 활성 구간의 종료 표식만 제거한다.
+                                before, arrow, after = chunk.partition(message.arrow)
+                                chunk = before + arrow + after.replace("-", "", 1)
+                kept.append(chunk)
+            chunk = ""
+        if chunk:
+            self.status.emit("삭제할 원문 범위를 확인할 수 없습니다.")
+            return
+        code = "".join(kept)
+        candidate = parse(code)
+        # 관계에서만 등장하던 반대쪽 객체도 선택하지 않았다면 유지한다.
+        if sequence and isinstance(original, SequenceDocument):
+            remaining = (
+                set(candidate.sequence.participants)
+                if isinstance(candidate, SequenceDocument)
+                else set()
+            )
+            missing = set(original.sequence.participants) - names - remaining
+            additions = [
+                f"participant {name}"
+                for name in original.sequence.participants
+                if name in missing
+            ]
+        else:
+            missing = (
+                {node.id for node in original.classes}
+                - names
+                - {node.id for node in candidate.classes}
+            )
+            additions = [
+                f"class {node.id}" for node in original.classes if node.id in missing
+            ]
+        if additions:
+            code = code.rstrip("\r\n") + "\n" + "\n".join(additions) + "\n"
+        candidate = parse(code)
+        if candidate.errors:
+            self.status.emit(
+                "삭제 후 구문 오류가 발생하여 원문을 유지합니다: "
+                + candidate.errors[0].message
+            )
+            return
+        if code == self.project.code:
+            return
+        self.project.code = code
+        if isinstance(candidate, ClassDiagram) and not sequence:
+            nodes = {node.id for node in candidate.classes}
+            edges = {edge.layout_key for edge in candidate.relations}
+            self.project.layout.nodes = {
+                key: value
+                for key, value in self.project.layout.nodes.items()
+                if key in nodes
+            }
+            self.project.layout.bends = {
+                key: value
+                for key, value in self.project.layout.bends.items()
+                if key in edges
+            }
+            self.project.layout.edges = {
+                key: value
+                for key, value in self.project.layout.edges.items()
+                if key in edges
+            }
+        with QSignalBlocker(self.editor):
+            self.editor.setPlainText(code)
+        self.validate()
+        self.record()

@@ -96,6 +96,7 @@ umlparser.edit.reorder_participants(code, order) -> str  # 시퀀스 참여자 �
 class Layout:
     nodes: dict[str, tuple[float, float]]             # class_id -> 박스 왼쪽 위 좌표
     edges: dict[str, str]                             # layout_key -> "straight" | "orthogonal"
+    bends: dict[str, list[tuple[float, float]]]        # layout_key -> 사용자가 지정한 꺾임 좌표, 기본 {}
 @dataclass
 class Project:
     code: str; layout: Layout; path: str | None
@@ -118,8 +119,16 @@ factory.build(scene, diagram: Diagram, layout: Layout) -> None   # 종류별 렌
 # 그림 요소가 보내는 시그널 (factory가 하나의 DiagramSignals 객체로 모아 줌)
 moved(class_id: str, x: float, y: float)       # 드래그를 놓았을 때
 double_clicked(class_id: str)
-edge_toggled(layout_key: str)                  # 관계선 클릭
+edge_toggled(layout_key: str)                  # 관계선 클릭, 수동 꺾임 초기화
+edge_bent(layout_key: str, points: object)      # list[tuple[float, float]], 드래그 완료 / 우클릭 제거
 ```
+
+수동 꺾임이 있으면 기존 선 모드보다 우선한다. 선분을 클릭하면 해당 선분 가운데에 임시 조절점만 표시되고,
+해당 조절점을 실제로 드래그하면 경유점이 생성되어 그 위치로 선이 꺾인다.
+클릭만으로는 경로·저장 데이터·수정 여부·실행 취소 이력이 바뀌지 않는다.
+점 앞뒤의 각 선분도 같은 방식으로 반복해서 나눌 수 있으며 꺾임 개수에는 제한을 두지 않는다. 선택한 선의 조절점만 표시하며 내보내기에는 포함하지 않는다. 우클릭 메뉴에서 가장 가까운 꺾임 또는 전체를 제거한다.
+좌표는 장면 기준으로 저장하며 클래스 이동 시 끝점만 클래스 경계에 다시 연결한다.
+`layout.bends`가 없는 기존 파일은 빈 값으로 읽고, 잘못된 좌표는 `StorageError`로 처리한다.
 
 ## 6. 일정
 | 날짜 | 공통 | 마감 산출물 |

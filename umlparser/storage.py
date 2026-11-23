@@ -21,6 +21,7 @@
 """
 
 import json
+import math
 import os
 import sys
 import tempfile
@@ -49,6 +50,7 @@ class StorageError(Exception):
 class Layout:
     nodes: dict[str, tuple[float, float]] = field(default_factory=dict)
     edges: dict[str, str] = field(default_factory=dict)
+    bends: dict[str, list[tuple[float, float]]] = field(default_factory=dict)
 
 
 @dataclass
@@ -118,6 +120,16 @@ def _layout_to_dict(layout: Layout) -> dict[str, Any]:
     return {
         "nodes": {class_id: [x, y] for class_id, (x, y) in layout.nodes.items()},
         "edges": dict(layout.edges),
+        **(
+            {
+                "bends": {
+                    key: [list(point) for point in points]
+                    for key, points in layout.bends.items()
+                }
+            }
+            if layout.bends
+            else {}
+        ),
     }
 
 
@@ -206,7 +218,22 @@ def _layout_from_dict(data: Any) -> Layout:
             )
         edges[key] = style
 
-    return Layout(nodes=nodes, edges=edges)
+    bends_data = data.get("bends", {})
+    if not isinstance(bends_data, dict):
+        raise StorageError("layout.bends 는 객체여야 합니다")
+    bends: dict[str, list[tuple[float, float]]] = {}
+    for key, points in bends_data.items():
+        if not isinstance(points, list) or any(
+            not isinstance(point, list | tuple)
+            or len(point) != 2
+            or not all(_is_number(value) and math.isfinite(value) for value in point)
+            for point in points
+        ):
+            raise StorageError(
+                f"layout.bends[{key!r}] 는 유한한 [x, y] 목록이어야 합니다"
+            )
+        bends[key] = [(float(x), float(y)) for x, y in points]
+    return Layout(nodes=nodes, edges=edges, bends=bends)
 
 
 def _is_number(value: Any) -> bool:

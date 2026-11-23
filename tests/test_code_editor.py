@@ -5,7 +5,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtCore import QSignalBlocker
+from PyQt6.QtCore import QMimeData, QSignalBlocker
 from PyQt6.QtWidgets import QApplication
 
 from gui.code_editor import CodeEditor
@@ -36,3 +36,50 @@ def test_margin_follows_blocked_set_plain_text(app: QApplication) -> None:
     app.processEvents()
     assert editor.blockCount() == 3
     assert_aligned(editor)
+
+
+@pytest.mark.parametrize("offset", [0, 3, 7])
+@pytest.mark.parametrize(
+    "code, fragment",
+    [
+        ("classDiagram\nclass A\n", "class B"),
+        ("sequenceDiagram\nA->>B: hi\n", "B-->>A: reply"),
+    ],
+)
+def test_paste_after_line_not_inside_statement(
+    app: QApplication, offset: int, code: str, fragment: str
+) -> None:
+    from umlparser import parse
+
+    editor = CodeEditor()
+    editor.setPlainText(code)
+    cursor = editor.textCursor()
+    cursor.setPosition(code.index("\n") + 1 + offset)
+    editor.setTextCursor(cursor)
+    mime = QMimeData()
+    mime.setText(fragment)
+    editor.insertFromMimeData(mime)
+    assert editor.toPlainText() == code.rstrip("\n") + "\n" + fragment + "\n"
+    assert not parse(editor.toPlainText()).errors
+    editor.deleteLater()
+
+
+def test_paste_blank_line_and_selection_preserve_original(app: QApplication) -> None:
+    from PyQt6.QtGui import QTextCursor
+
+    editor = CodeEditor()
+    editor.setPlainText("classDiagram\nclass A\n   ")
+    cursor = editor.textCursor()
+    cursor.movePosition(QTextCursor.MoveOperation.End)
+    editor.setTextCursor(cursor)
+    mime = QMimeData()
+    mime.setText("class B\r\nclass C\r\n")
+    editor.insertFromMimeData(mime)
+    assert editor.toPlainText() == "classDiagram\nclass A\nclass B\nclass C\n"
+    cursor.setPosition(15)
+    cursor.setPosition(18, QTextCursor.MoveMode.KeepAnchor)
+    editor.setTextCursor(cursor)
+    mime.setText("class D")
+    editor.insertFromMimeData(mime)
+    assert "class A\nclass D\nclass B" in editor.toPlainText()
+    editor.deleteLater()

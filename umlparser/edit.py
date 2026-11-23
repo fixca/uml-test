@@ -41,8 +41,15 @@ def class_block(code: str, class_id: str) -> str:
 
     선언 블록(`class X { ... }`)과 블록 밖의 `X : 멤버`,
     `<<interface>> X` 줄을 모두 포함한다. 관계 줄은 포함하지 않는다.
-    클래스가 없거나 관계에서만 쓰인(implicit) 클래스면 빈 문자열을 돌려준다.
+    관계에서만 쓰인(implicit) 클래스는 독립된 클래스 선언으로 복사한다.
+    클래스가 없거나 원문에 오류가 있으면 빈 문자열을 돌려준다.
     """
+    diagram = parse(code)
+    if diagram.errors:
+        return ""
+    for candidate in diagram.classes:
+        if candidate.id == class_id and candidate.implicit:
+            return f"class {candidate.id}"
     node = _declared_class(code, class_id)
     if node is None:
         return ""

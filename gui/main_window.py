@@ -3,7 +3,14 @@
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QCloseEvent, QKeySequence, QPainter
+from PyQt6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QColor,
+    QKeySequence,
+    QPainter,
+    QPalette,
+)
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -73,6 +80,7 @@ class MainWindow(QMainWindow):
         self.actions: dict[str, QAction] = {}
         self.copy_origin: tuple[str, tuple[float, float]] | None = None
         self.create_menus()
+        self.apply_light_theme()
         self.controller.set_project(storage.new_project())
         if restore_last:
             path = storage.last_path()
@@ -80,6 +88,46 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(
                     "마지막 파일을 열지 못해 새 문서를 열었습니다."
                 )
+
+    def apply_light_theme(self) -> None:
+        """운영체제 설정과 관계없이 라이트 팔레트를 사용한다."""
+        background, base, foreground, button = (
+            "#f3f4f6",
+            "#ffffff",
+            "#202124",
+            "#e5e7eb",
+        )
+        palette = QPalette(self.palette())
+        for role, color in (
+            (QPalette.ColorRole.Window, background),
+            (QPalette.ColorRole.Base, base),
+            (QPalette.ColorRole.AlternateBase, button),
+            (QPalette.ColorRole.WindowText, foreground),
+            (QPalette.ColorRole.Text, foreground),
+            (QPalette.ColorRole.Button, button),
+            (QPalette.ColorRole.ButtonText, foreground),
+            (QPalette.ColorRole.ToolTipBase, background),
+            (QPalette.ColorRole.ToolTipText, foreground),
+            (QPalette.ColorRole.Highlight, "#2563eb"),
+            (QPalette.ColorRole.HighlightedText, "#ffffff"),
+        ):
+            palette.setColor(role, QColor(color))
+        self.setPalette(palette)
+        self.setStyleSheet(f"""
+            QMainWindow, QMenuBar, QMenu, QStatusBar, QSplitter {{
+                background-color: {background}; color: {foreground};
+            }}
+            QMenuBar::item:selected, QMenu::item:selected {{
+                background-color: #2563eb; color: white;
+            }}
+            QPlainTextEdit {{ background-color: {base}; color: {foreground}; }}
+            QSplitter::handle {{ background-color: {button}; }}
+            QSplitter::handle:hover {{ background-color: #2563eb; }}
+            QGraphicsView {{ background-color: {base}; }}
+        """)
+        self.view.setBackgroundBrush(QColor(base))
+        self.scene.setBackgroundBrush(QColor(base))
+        self.editor.numbers.update()
 
     def create_menus(self) -> None:
         file_menu = self.menuBar().addMenu("파일")
@@ -118,6 +166,7 @@ class MainWindow(QMainWindow):
                 self.controller.redo,
             ),
             (edit_menu, "copy", "복사", QKeySequence.StandardKey.Copy, self.copy),
+            (edit_menu, "delete", "삭제", "Delete", self.delete),
             (
                 edit_menu,
                 "paste",
@@ -154,6 +203,17 @@ class MainWindow(QMainWindow):
             [QKeySequence("Ctrl+Y"), QKeySequence("Ctrl+Shift+Z")]
             + QKeySequence.keyBindings(QKeySequence.StandardKey.Redo)
         )
+
+        # 숫자패드 없이 = / - 키로 확대·축소한다. 기존 표준 키도 유지한다.
+        for name, shortcuts in (
+            ("zoom_in", ["Ctrl+=", "Ctrl++", "Ctrl+Shift+=", "Ctrl+Shift++"]),
+            ("zoom_out", ["Ctrl+-"]),
+        ):
+            bindings = [QKeySequence(key) for key in shortcuts] + self.actions[
+                name
+            ].shortcuts()
+            unique = {binding.toString(): binding for binding in bindings}
+            self.actions[name].setShortcuts(list(unique.values()))
 
     def update_state(self) -> None:
         controller = self.controller
@@ -284,6 +344,14 @@ class MainWindow(QMainWindow):
             QApplication.clipboard().setText(block)
             position = self.controller.project.layout.nodes.get(selected[0], (0.0, 0.0))
             self.copy_origin = (block, position)
+
+    def delete(self) -> None:
+        if self.editor.hasFocus():
+            cursor = self.editor.textCursor()
+            cursor.deleteChar()
+            self.editor.setTextCursor(cursor)
+            return
+        self.controller.delete_selected()
 
     def paste(self) -> None:
         if self.editor.hasFocus():

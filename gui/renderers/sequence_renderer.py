@@ -1,13 +1,16 @@
 """시퀀스 참여자와 메시지의 시간순 배치."""
 
 from PyQt6.QtCore import QPointF, Qt, QTimer
-from PyQt6.QtGui import QBrush, QFontMetricsF, QPen, QPolygonF
+from PyQt6.QtGui import QBrush, QFontMetricsF, QPainter, QPainterPath, QPen, QPolygonF
 from PyQt6.QtWidgets import (
+    QGraphicsItem,
     QGraphicsLineItem,
     QGraphicsRectItem,
     QGraphicsScene,
     QGraphicsSceneMouseEvent,
     QGraphicsSimpleTextItem,
+    QStyleOptionGraphicsItem,
+    QWidget,
 )
 
 from gui.canvas import DiagramSignals
@@ -28,7 +31,13 @@ class ParticipantItem(QGraphicsRectItem):
         signals: DiagramSignals,
     ) -> None:
         super().__init__(-width / 2, 0, width, 44)
+        self.is_actor = participant.kind == "actor"
+        if self.is_actor:
+            self.setRect(-width / 2, -44, width, 88)
         self.key = participant_key(participant.id)
+        self.setData(0, self.key)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        self.press_x = 0.0
         self.spacing = spacing
         self.first_x = width / 2
         self.signals = signals
@@ -38,14 +47,42 @@ class ParticipantItem(QGraphicsRectItem):
         self.setToolTip("좌우로 드래그하여 참여자 순서를 변경합니다.")
         self.setBrush(QBrush(Qt.GlobalColor.white))
         caption = participant.label
-        if participant.kind == "actor":
-            caption = f"«actor» {caption}"
         label = QGraphicsSimpleTextItem(caption, self)
         label.setPos(-label.boundingRect().width() / 2, 12)
+        label.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         label.setZValue(2)  # 활성 구간보다 위에 둔다.
         self.setZValue(2)
 
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionGraphicsItem,
+        widget: QWidget | None = None,
+    ) -> None:
+        if not self.is_actor:
+            super().paint(painter, option, widget)
+            return
+        painter.save()
+        painter.setPen(QPen(INK, 1.6))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(QPointF(0, -35), 7, 7)
+        body = QPainterPath(QPointF(0, -28))
+        body.lineTo(0, -8)
+        body.moveTo(-15, -22)
+        body.lineTo(15, -22)
+        body.moveTo(-13, 7)
+        body.lineTo(0, -8)
+        body.lineTo(13, 7)
+        painter.drawPath(body)
+        if self.isSelected() and widget is not None:
+            painter.setPen(QPen(Qt.GlobalColor.blue, 1, Qt.PenStyle.DashLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(self.rect())
+        painter.restore()
+
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        super().mousePressEvent(event)
+        self.press_x = event.scenePos().x()
         self.grab_offset = event.scenePos().x() - self.x()
         self.setCursor(Qt.CursorShape.ClosedHandCursor)
         event.accept()
@@ -55,6 +92,11 @@ class ParticipantItem(QGraphicsRectItem):
         event.accept()
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        super().mouseReleaseEvent(event)
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        if abs(event.scenePos().x() - self.press_x) < 1:
+            event.accept()
+            return
         x = event.scenePos().x() - self.grab_offset
         column = round((x - self.first_x) / self.spacing)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
@@ -208,8 +250,12 @@ class SequenceRenderer(DiagramRenderer):
     ) -> None:
         if not isinstance(diagram, SequenceDocument):
             raise TypeError("시퀀스 모델이 필요합니다.")
+        selected = {item.data(0) for item in scene.selectedItems()}
         scene.clear()
         draw_sequence(scene, diagram.sequence, 0, signals)
+        for item in scene.items():
+            if isinstance(item, ParticipantItem):
+                item.setSelected(item.key in selected)
         scene.setSceneRect(scene.itemsBoundingRect().adjusted(-40, -40, 40, 40))
 
     def moved_code(
