@@ -66,6 +66,11 @@ class ClassDiagramRenderer(DiagramRenderer):
         # 새 좌표만 layout에 채우고 수동 위치는 보존한다.
         fill_missing_positions(diagram, layout, sizes)
         # 장면 객체 자체는 유지하므로 scene.signals와 컨트롤러 연결도 유지된다.
+        selected_edges = {
+            item.relation.layout_key
+            for item in scene.selectedItems()
+            if isinstance(item, RelationItem)
+        }
         previous = object_states(scene)
         scene.clear()
         for class_id, item in nodes.items():
@@ -93,6 +98,7 @@ class ClassDiagramRenderer(DiagramRenderer):
                 layout.bends.get(relation.layout_key),
             )
             scene.addItem(relation_item)
+            relation_item.setSelected(relation.layout_key in selected_edges)
             # 드래그 중에는 모델이나 layout을 바꾸지 않고 선만 따라 움직인다.
             source_item.xChanged.connect(relation_item.update_geometry)
             source_item.yChanged.connect(relation_item.update_geometry)

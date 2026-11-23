@@ -2,7 +2,7 @@
 
 상속 / 구현 / 연관 / 집합 / 합성 / 의존의 UML 표기를 그린다.
 layout.edges의 모드에 따라 직선 또는 직각 꺾은 선으로 표시한다.
-클릭은 장면의 edge_toggled 시그널로 전달한다.
+클릭으로 중앙 조절점을 만들고 점 드래그 결과를 edge_bent 시그널로 전달한다.
 """
 
 from itertools import pairwise
@@ -19,6 +19,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication,
+    QGraphicsEllipseItem,
     QGraphicsItem,
     QGraphicsPathItem,
     QGraphicsSceneContextMenuEvent,
@@ -63,6 +64,19 @@ class RelationLabel(QGraphicsSimpleTextItem):
         super().paint(painter, option, widget)
 
 
+class BendHandle(QGraphicsEllipseItem):
+    """선택한 관계의 경유점. 내보내기에는 조절점을 그리지 않는다."""
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionGraphicsItem,
+        widget: QWidget | None = None,
+    ) -> None:
+        if widget is not None:
+            super().paint(painter, option, widget)
+
+
 class RelationItem(QGraphicsPathItem):
     """파서가 정규화한 to 쪽에 삼각형·마름모·화살촉을 둔다.
 
@@ -84,9 +98,9 @@ class RelationItem(QGraphicsPathItem):
         self.mode = mode
         self.bends = [QPointF(x, y) for x, y in (bends or [])]
         self.drag_index: int | None = None
-        self.press_point = QPointF()
+        self.dragged = False
         self.setToolTip(
-            "드래그: 꺾임 추가·이동 / 우클릭: 꺾임 제거 / 클릭: 선 모드 전환"
+            "클릭: 가운데 조절점 표시 / 점 드래그: 경유 위치 변경 / 우클릭: 꺾임 제거"
         )
         # 클래스 박스 뒤에 선을 놓아 박스 내부를 가리지 않게 한다.
         self.setZValue(-1)
@@ -97,6 +111,7 @@ class RelationItem(QGraphicsPathItem):
         self.setPen(pen)
         self.pressed = False
         self.decorations: list[QGraphicsItem] = []
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.update_geometry()
 
     def _route(self) -> list[QPointF]:
@@ -188,6 +203,24 @@ class RelationItem(QGraphicsPathItem):
         self._multiplicity(self.relation.from_multiplicity, points[0], self.source)
         self._multiplicity(self.relation.to_multiplicity, points[-1], self.target)
         self._label(self.relation.label, self._midpoint(points) + QPointF(0, -14))
+        for point in self.bends:
+            handle = BendHandle(-6, -6, 12, 12, self)
+            handle.setPos(point)
+            handle.setPen(QPen(QColor("#2563eb"), 1.5))
+            handle.setBrush(QColor("white"))
+            handle.setZValue(3)
+            handle.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+            handle.setVisible(self.isSelected())
+            self.decorations.append(handle)
+
+    def itemChange(
+        self, change: QGraphicsItem.GraphicsItemChange, value: object
+    ) -> object:
+        if change == QGraphicsItem.GraphicsItemChange.ItemSelectedHasChanged:
+            for item in self.decorations:
+                if isinstance(item, BendHandle):
+                    item.setVisible(bool(value))
+        return super().itemChange(change, value)
 
     def _head(
         self, tip: QPointF, previous: QPointF, shape: str, filled: bool = False
@@ -279,18 +312,31 @@ class RelationItem(QGraphicsPathItem):
         """얇은 선 주변도 클릭할 수 있게 클릭 판정 폭을 넓힌다."""
         stroker = QPainterPathStroker()
         stroker.setWidth(10.0)
-        return stroker.createStroke(self.path())
+        shape = stroker.createStroke(self.path())
+        if self.isSelected():
+            for point in self.bends:
+                shape.addEllipse(point, 8, 8)
+        return shape
 
     def boundingRect(self) -> QRectF:
         """넓힌 클릭 영역이 Qt의 후보 아이템 탐색에서도 포함되도록 한다."""
-        return super().boundingRect().adjusted(-5, -5, 5, 5)
+        return super().boundingRect().adjusted(-8, -8, 8, 8)
 
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         """왼쪽 클릭만 받는다. 아직 선 모드나 layout은 변경하지 않는다."""
         self.pressed = event.button() == Qt.MouseButton.LeftButton
         if self.pressed:
-            self.press_point = event.pos()
-            self.drag_index = None
+            self.dragged = False
+            self.drag_index = next(
+                (
+                    index
+                    for index, point in enumerate(self.bends)
+                    if self.isSelected()
+                    and hypot((point - event.pos()).x(), (point - event.pos()).y()) <= 8
+                ),
+                None,
+            )
+            self.setSelected(True)
             event.accept()
         else:
             event.ignore()
@@ -300,39 +346,15 @@ class RelationItem(QGraphicsPathItem):
             event.ignore()
             return
         if self.drag_index is None:
-            distance = (
-                event.screenPos() - event.buttonDownScreenPos(Qt.MouseButton.LeftButton)
-            ).manhattanLength()
-            if distance < QApplication.startDragDistance():
-                event.accept()
-                return
-            route = self._route()
-            self.bends = [QPointF(point) for point in route[1:-1]]
-            nearest = min(
-                range(len(self.bends)),
-                key=lambda i: hypot(
-                    (self.bends[i] - self.press_point).x(),
-                    (self.bends[i] - self.press_point).y(),
-                ),
-                default=None,
-            )
-            if (
-                nearest is not None
-                and hypot(
-                    (self.bends[nearest] - self.press_point).x(),
-                    (self.bends[nearest] - self.press_point).y(),
-                )
-                <= 12
-            ):
-                self.drag_index = nearest
-            else:
-                self.drag_index = min(
-                    range(len(route) - 1),
-                    key=lambda i: self._segment_distance(
-                        self.press_point, route[i], route[i + 1]
-                    ),
-                )
-                self.bends.insert(self.drag_index, QPointF(self.press_point))
+            event.accept()
+            return
+        distance = (
+            event.screenPos() - event.buttonDownScreenPos(Qt.MouseButton.LeftButton)
+        ).manhattanLength()
+        if distance < QApplication.startDragDistance():
+            event.accept()
+            return
+        self.dragged = True
         self.bends[self.drag_index] = event.pos()
         self.update_geometry()
         event.accept()
@@ -399,8 +421,8 @@ class RelationItem(QGraphicsPathItem):
         event.accept()
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        """선 위에서 눌렀다가 선 위에서 놓은 경우에만 전환을 요청한다."""
-        if self.pressed and self.drag_index is not None:
+        """클릭은 가운데 조절점을 만들고, 점 드래그는 경유 위치를 저장한다."""
+        if self.pressed and self.drag_index is not None and self.dragged:
             self.bends[self.drag_index] = event.pos()
             self.update_geometry()
             self.pressed = False
@@ -411,24 +433,16 @@ class RelationItem(QGraphicsPathItem):
         clicked = self.pressed and self.shape().contains(event.pos())
         self.pressed = False
         event.accept()
-        scene = self.scene()
-        if not clicked or scene is None:
+        if not clicked or self.bends:
             return
-        signals = getattr(scene, "signals", None)
-        if signals is None:
-            return
-        # 표시 이름이나 관계 ID가 아니라 저장에 쓰이는 layout_key를 전달한다.
-        layout_key = self.relation.layout_key
-
-        def notify_controller() -> None:
-            """현재 마우스 이벤트가 끝난 다음, 아직 유효한 클릭만 전달한다."""
-            # 다른 입력이 먼저 장면을 다시 만들었으면 지난 클릭을 버린다.
-            try:
-                if self.scene() is scene:
-                    signals.edge_toggled.emit(layout_key)
-            except RuntimeError:
-                # scene.clear()로 C++ 아이템이 이미 삭제된 경우다.
-                return
-
-        # 이벤트 처리 중 컨트롤러가 scene.clear()로 자신을 지우지 않게 한다.
-        QTimer.singleShot(0, notify_controller)
+        route = self._route()
+        midpoint = self._midpoint(route)
+        index = min(
+            range(len(route) - 1),
+            key=lambda i: self._segment_distance(midpoint, route[i], route[i + 1]),
+        )
+        self.bends = [QPointF(point) for point in route[1:-1]]
+        if midpoint not in self.bends:
+            self.bends.insert(index, midpoint)
+        self.update_geometry()
+        self._notify_bends()

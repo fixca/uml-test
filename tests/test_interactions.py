@@ -84,19 +84,20 @@ def test_click_select_and_double_click(app: QApplication, canvas: tuple) -> None
 
 def test_edge_click_can_rebuild_scene(app: QApplication, canvas: tuple) -> None:
     scene, view, diagram, layout = canvas
-    toggled = QSignalSpy(scene.signals.edge_toggled)
+    bent = QSignalSpy(scene.signals.edge_bent)
 
-    def redraw(key: str) -> None:
-        layout.edges[key] = "orthogonal"
+    def redraw(key: str, points: list[tuple[float, float]]) -> None:
+        layout.bends[key] = points
         build(scene, diagram, layout)
 
-    scene.signals.edge_toggled.connect(redraw)
+    scene.signals.edge_bent.connect(redraw)
     edge = next(item for item in scene.items() if isinstance(item, RelationItem))
     point = view.mapFromScene(edge.path().pointAtPercent(0.5) + QPointF(0, 3))
     QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=point)
     app.processEvents()
-    assert list(toggled) == [["A->B"]]
-    assert layout.edges["A->B"] == "orthogonal"
+    assert len(bent) == 1
+    assert bent[0][0] == "A->B"
+    assert len(layout.bends["A->B"]) == 1
 
 
 def test_drag_can_rebuild_scene(app: QApplication, canvas: tuple) -> None:

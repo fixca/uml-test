@@ -10,7 +10,7 @@ from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from gui.items.relation_item import RelationItem
+from gui.items.relation_item import BendHandle, RelationItem
 from gui.main_window import MainWindow
 from umlparser.storage import Layout, Project, StorageError, load, save
 
@@ -41,6 +41,14 @@ def test_drag_add_move_undo_save(window: MainWindow, tmp_path: Path) -> None:
     item = edge(window)
     key = item.relation.layout_key
     start = window.view.mapFromScene(item.path().pointAtPercent(0.5))
+    QTest.mouseClick(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    QApplication.processEvents()
+    initial = window.controller.project.layout.bends[key]
+    handles = [
+        item for item in edge(window).childItems() if isinstance(item, BendHandle)
+    ]
+    assert len(handles) == 1 and handles[0].isVisible()
+    assert QPointF(*initial[0]) == edge(window).path().pointAtPercent(0.5)
     end = start + QPoint(0, 70)
     QTest.mousePress(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
     QTest.mouseMove(window.view.viewport(), end, delay=20)
@@ -61,7 +69,10 @@ def test_drag_add_move_undo_save(window: MainWindow, tmp_path: Path) -> None:
     window.controller.undo()
     assert window.controller.project.layout.bends[key] == points
     window.controller.undo()
+    assert window.controller.project.layout.bends[key] == initial
+    window.controller.undo()
     assert key not in window.controller.project.layout.bends
+    window.controller.redo()
     window.controller.redo()
     path = tmp_path / "bends.umlproj"
     save(window.controller.project, str(path))
@@ -104,3 +115,33 @@ def test_invalid_saved_bends(tmp_path: Path, points: object) -> None:
     path.write_text(json.dumps({"layout": {"bends": {"r": points}}}), encoding="utf-8")
     with pytest.raises(StorageError):
         load(str(path))
+
+
+def test_line_drag_requires_handle_and_click_is_idempotent(window: MainWindow) -> None:
+    item = edge(window)
+    key = item.relation.layout_key
+    start = window.view.mapFromScene(item.path().pointAtPercent(0.25))
+    end = start + QPoint(0, 60)
+    QTest.mousePress(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    QTest.mouseMove(window.view.viewport(), end, delay=20)
+    QTest.mouseRelease(window.view.viewport(), Qt.MouseButton.LeftButton, pos=end)
+    QApplication.processEvents()
+    assert key not in window.controller.project.layout.bends
+    QTest.mouseClick(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    QApplication.processEvents()
+    item = edge(window)
+    assert len(item.bends) == 1
+    assert item.bends[0] == item.path().pointAtPercent(0.5)
+    before = window.controller.snapshot()
+    index = window.controller.history_index
+    point = window.view.mapFromScene(item.bends[0])
+    QTest.mouseClick(window.view.viewport(), Qt.MouseButton.LeftButton, pos=point)
+    QApplication.processEvents()
+    assert window.controller.snapshot() == before
+    assert window.controller.history_index == index
+    window.scene.clearSelection()
+    assert all(
+        not child.isVisible()
+        for child in edge(window).childItems()
+        if isinstance(child, BendHandle)
+    )
