@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QApplication, QGraphicsLineItem
 
 from gui.items.class_item import ClassItem
 from gui.main_window import MainWindow
-from gui.renderers.sequence_renderer import ParticipantItem
+from gui.renderers.sequence_renderer import ActivationItem, ParticipantItem
 from umlparser import parse
 from umlparser.export import export_scene
 from umlparser.sequence import SequenceDocument
@@ -137,4 +137,61 @@ def test_drop_on_same_column_keeps_code_and_history() -> None:
     assert controller.project.code == SEQUENCE
     assert len(controller.history) == length
     assert headers(window)[0].key == "sequence:User"
+    window.hide()
+
+
+ACTIVE = "sequenceDiagram\nA->>+B: 요청\nB-->>-A: 응답\n"
+NESTED = "sequenceDiagram\nA->>+B: a\nA->>+B: b\nB-->>-A: c\nB-->>-A: d\n"
+
+
+def activations(window: MainWindow) -> list[ActivationItem]:
+    return sorted(
+        (i for i in window.scene.items() if isinstance(i, ActivationItem)),
+        key=lambda item: item.activation.depth,
+    )
+
+
+def test_activation_is_drawn_on_lifeline_of_receiver() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(restore_last=False)
+    window.controller.set_project(Project(ACTIVE, Layout(), None))
+    app.processEvents()
+    (item,) = activations(window)
+    parent = item.parentItem()
+    assert isinstance(parent, ParticipantItem) and parent.key == "sequence:B"
+    rect = item.mapRectToScene(item.rect())
+    assert (rect.top(), rect.bottom()) == (84.0, 84.0 + 64.0)  # 첫·둘째 메시지 y
+    window.hide()
+
+
+def test_nested_activations_are_offset_by_five() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(restore_last=False)
+    window.controller.set_project(Project(NESTED, Layout(), None))
+    app.processEvents()
+    outer, inner = activations(window)
+    left = lambda item: item.mapRectToScene(item.rect()).left()  # noqa: E731
+    assert left(inner) - left(outer) == 5
+    window.hide()
+
+
+def test_activation_follows_participant_after_reorder() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(restore_last=False)
+    controller = window.controller
+    controller.set_project(Project(ACTIVE, Layout(), None))
+    window.show()
+    app.processEvents()
+    first, second = headers(window)
+    start = window.view.mapFromScene(second.mapToScene(QPointF(0, 22)))
+    end = window.view.mapFromScene(first.mapToScene(QPointF(0, 22)))
+    QTest.mousePress(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    QTest.mouseMove(window.view.viewport(), end)
+    QTest.mouseRelease(window.view.viewport(), Qt.MouseButton.LeftButton, pos=end)
+    app.processEvents()
+    assert controller.project.code != ACTIVE
+    assert list(parse(controller.project.code).sequence.participants) == ["B", "A"]
+    (item,) = activations(window)
+    assert item.parentItem() is headers(window)[0]
+    assert item.parentItem().key == "sequence:B"
     window.hide()
