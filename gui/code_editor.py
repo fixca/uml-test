@@ -8,6 +8,7 @@ from PyQt6.QtGui import (
     QKeySequence,
     QPainter,
     QPaintEvent,
+    QPalette,
     QResizeEvent,
     QTextCharFormat,
     QTextCursor,
@@ -105,8 +106,8 @@ class CodeEditor(QPlainTextEdit):
 
     def paint_numbers(self, event: QPaintEvent) -> None:
         painter = QPainter(self.numbers)
-        painter.fillRect(event.rect(), QColor("#eeeeee"))
-        painter.setPen(QColor("#555555"))
+        painter.fillRect(event.rect(), self.palette().color(QPalette.ColorRole.Window))
+        painter.setPen(self.palette().color(QPalette.ColorRole.WindowText))
         block = self.firstVisibleBlock()
         top = round(
             self.blockBoundingGeometry(block).translated(self.contentOffset()).top()

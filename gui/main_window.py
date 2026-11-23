@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QCloseEvent, QKeySequence, QPainter
+from PyQt6.QtCore import QSettings, Qt
+from PyQt6.QtGui import QAction, QCloseEvent, QColor, QKeySequence, QPainter, QPalette
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QSplitter,
+    QToolButton,
 )
 
 from gui.canvas import DiagramScene, DiagramView
@@ -54,8 +55,13 @@ class ExportDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, restore_last: bool = True) -> None:
+    def __init__(
+        self, restore_last: bool = True, settings: QSettings | None = None
+    ) -> None:
         super().__init__()
+        self.appearance_settings = (
+            settings if settings is not None else QSettings("uml-tool", "appearance")
+        )
         self.resize(1200, 800)
         self.editor = CodeEditor(self)
         self.scene = DiagramScene(self)
@@ -73,6 +79,18 @@ class MainWindow(QMainWindow):
         self.actions: dict[str, QAction] = {}
         self.copy_origin: tuple[str, tuple[float, float]] | None = None
         self.create_menus()
+        self.theme_button = QToolButton(self)
+        self.theme_button.setCheckable(True)
+        self.theme_button.setAccessibleName("다크 모드 전환")
+        self.menuBar().setCornerWidget(self.theme_button, Qt.Corner.TopRightCorner)
+        stored_theme = self.appearance_settings.value("theme")
+        dark = (
+            stored_theme == "dark"
+            if stored_theme in ("dark", "light")
+            else self.palette().color(QPalette.ColorRole.Window).lightness() < 128
+        )
+        self.apply_theme(dark)
+        self.theme_button.clicked.connect(self.change_theme)
         self.controller.set_project(storage.new_project())
         if restore_last:
             path = storage.last_path()
@@ -80,6 +98,59 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(
                     "마지막 파일을 열지 못해 새 문서를 열었습니다."
                 )
+
+    def apply_theme(self, dark: bool) -> None:
+        """앱 UI 팔레트를 명시해 운영체제 테마와 별도로 전환한다."""
+        background, base, foreground, button = (
+            ("#202124", "#17181a", "#e8eaed", "#303134")
+            if dark
+            else ("#f3f4f6", "#ffffff", "#202124", "#e5e7eb")
+        )
+        palette = QPalette(self.palette())
+        for role, color in (
+            (QPalette.ColorRole.Window, background),
+            (QPalette.ColorRole.Base, base),
+            (QPalette.ColorRole.AlternateBase, button),
+            (QPalette.ColorRole.WindowText, foreground),
+            (QPalette.ColorRole.Text, foreground),
+            (QPalette.ColorRole.Button, button),
+            (QPalette.ColorRole.ButtonText, foreground),
+            (QPalette.ColorRole.ToolTipBase, background),
+            (QPalette.ColorRole.ToolTipText, foreground),
+            (QPalette.ColorRole.Highlight, "#2563eb"),
+            (QPalette.ColorRole.HighlightedText, "#ffffff"),
+        ):
+            palette.setColor(role, QColor(color))
+        self.setPalette(palette)
+        self.setStyleSheet(f"""
+            QMainWindow, QMenuBar, QMenu, QStatusBar, QSplitter {{
+                background-color: {background}; color: {foreground};
+            }}
+            QMenuBar::item:selected, QMenu::item:selected {{
+                background-color: #2563eb; color: white;
+            }}
+            QPlainTextEdit {{ background-color: {base}; color: {foreground}; }}
+            QToolButton {{ background-color: {button}; color: {foreground};
+                border: 1px solid #80868b; border-radius: 4px; padding: 4px 10px; }}
+            QToolButton:hover {{ border-color: #2563eb; }}
+            QGraphicsView {{ background-color: white; }}
+        """)
+        self.view.setBackgroundBrush(QColor("white"))
+        self.theme_button.setChecked(dark)
+        self.theme_button.setText("라이트 모드" if dark else "다크 모드")
+        self.theme_button.setToolTip(
+            "라이트 모드로 전환" if dark else "다크 모드로 전환"
+        )
+        self.editor.numbers.update()
+
+    def change_theme(self, dark: bool) -> None:
+        self.apply_theme(dark)
+        self.appearance_settings.setValue("theme", "dark" if dark else "light")
+        self.appearance_settings.sync()
+        if self.appearance_settings.status() != QSettings.Status.NoError:
+            self.statusBar().showMessage(
+                "테마를 전환했지만 설정을 저장하지 못했습니다."
+            )
 
     def create_menus(self) -> None:
         file_menu = self.menuBar().addMenu("파일")
