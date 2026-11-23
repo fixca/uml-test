@@ -1,10 +1,8 @@
 """팩토리에 전달할 장면과 공통 상호작용 시그널."""
 
 from PyQt6.QtCore import QObject, QPoint, QPointF, QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QMouseEvent, QPainter, QWheelEvent
+from PyQt6.QtGui import QMouseEvent, QWheelEvent
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView, QWidget
-
-from gui.theme import apply_scene_theme, is_dark
 
 
 class DiagramSignals(QObject):
@@ -18,25 +16,6 @@ class DiagramScene(QGraphicsScene):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.signals = DiagramSignals(self)
-
-    def render(
-        self,
-        painter: QPainter,
-        target: QRectF = QRectF(),
-        source: QRectF = QRectF(),
-        aspectRatioMode: Qt.AspectRatioMode = Qt.AspectRatioMode.KeepAspectRatio,
-    ) -> None:
-        """내보내기는 기존 흰색 문서 색상을 사용하고 화면 테마를 복원한다."""
-        dark = is_dark(self)
-        try:
-            if dark:
-                self.setProperty("dark_mode", False)
-                apply_scene_theme(self)
-            super().render(painter, target, source, aspectRatioMode)
-        finally:
-            if dark:
-                self.setProperty("dark_mode", True)
-                apply_scene_theme(self)
 
     def selected_class_ids(self) -> list[str]:
         return list(

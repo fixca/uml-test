@@ -15,7 +15,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from gui.theme import canvas_color
 from umlparser.model import ClassNode
 
 PADDING = 12.0
@@ -120,8 +119,8 @@ class ClassItem(QGraphicsObject):
         option: QStyleOptionGraphicsItem,
         widget: QWidget | None = None,
     ) -> None:
-        painter.setPen(QPen(canvas_color(self.scene(), "#334155"), 1.2))
-        painter.setBrush(canvas_color(self.scene(), "#ffffff"))
+        painter.setPen(QPen(QColor("#334155"), 1.2))
+        painter.setBrush(QColor("white"))
         painter.drawRect(self.rect)
         # 이름 칸은 가운데 정렬, 속성·메서드 칸은 왼쪽 정렬한다.
         top = 0.0

@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import QGraphicsScene
 
 from gui.canvas import DiagramSignals
 from gui.renderers import Diagram, renderer_for
-from gui.theme import apply_scene_theme
 from umlparser.storage import Layout
 
 
@@ -32,4 +31,3 @@ def build(scene: QGraphicsScene, diagram: Diagram, layout: Layout) -> None:
         scene.signals = signals
 
     renderer_for(diagram).render(scene, diagram, layout, signals)
-    apply_scene_theme(scene)
