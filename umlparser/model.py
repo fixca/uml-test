@@ -269,7 +269,10 @@ class ClassNode:
 
 @dataclass
 class Relation:
-    """관계선 하나. 상속/구현은 from_ = 자식, to = 부모로 정규화한다."""
+    """관계선 하나. 상속/구현은 from_ = 자식, to = 부모로 정규화한다.
+
+    directed: 연관/의존은 to 쪽 화살촉, 집합/합성은 from_ 쪽 화살촉이 있다.
+    """
 
     id: str
     from_: str

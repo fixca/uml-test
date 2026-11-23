@@ -80,7 +80,7 @@ uml-tool/
 class ClassDiagram:
     version: int; type: str            # "class"
     classes: list[ClassNode]           # id, name, kind, generics, attributes, methods, values, implicit, source
-    relations: list[Relation]          # id, from_, to, kind, directed, from_multiplicity, to_multiplicity, label, layout_key, source
+    relations: list[Relation]          # id, from_, to, kind, directed(연관·의존은 to 쪽, 집합·합성은 마름모 반대쪽 화살촉), from_multiplicity, to_multiplicity, label, layout_key, source
     errors: list[ParseError]           # line, column, message
 ```
 Python 이름은 snake_case(`from_`, `layout_key`), JSON은 class-model.md 이름(`from`, `layoutKey`). 변환은 `to_dict()/from_dict()`.

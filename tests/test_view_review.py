@@ -15,6 +15,7 @@ from gui.canvas import DiagramScene
 from gui.factory import build
 from gui.items.class_item import ClassItem
 from gui.items.relation_item import RelationItem
+from umlparser import parse
 from umlparser.export import export_scene
 from umlparser.model import ClassDiagram, ClassNode, Relation
 from umlparser.storage import Layout
@@ -120,3 +121,44 @@ def test_svg_export_contains_text_and_restores_selection(
     assert "#2563eb" not in text.lower()
     assert scene.selected_class_ids() == ["A"]
     scene.clear()
+
+
+def head_items(edge: RelationItem) -> list[QGraphicsPathItem]:
+    return [i for i in edge.childItems() if isinstance(i, QGraphicsPathItem)]
+
+
+@pytest.mark.parametrize("mode", ["straight", "orthogonal"])
+def test_navigable_aggregation_has_diamond_and_open_head(
+    app: QApplication, mode: str
+) -> None:
+    model = parse("A o--> B")
+    scene = DiagramScene()
+    layout = Layout(nodes={"A": (0, 0), "B": (420, 280)})
+    layout.edges[model.relations[0].layout_key] = mode
+    build(scene, model, layout)
+    edge = next(item for item in scene.items() if isinstance(item, RelationItem))
+    heads = head_items(edge)
+    assert len(heads) == 2
+    path = edge.path()
+    start = edge.mapToScene(path.pointAtPercent(0))  # from_(B) 쪽
+    end = edge.mapToScene(path.pointAtPercent(1))  # to(A) 쪽
+    diamond, open_head = heads
+    assert diamond.sceneBoundingRect().adjusted(-1, -1, 1, 1).contains(end)
+    assert open_head.sceneBoundingRect().adjusted(-1, -1, 1, 1).contains(start)
+    assert diamond.brush().color() == QColor("white")
+
+
+def test_plain_aggregation_keeps_single_head(app: QApplication) -> None:
+    scene = DiagramScene()
+    build(scene, parse("A o-- B"), Layout(nodes={"A": (0, 0), "B": (420, 280)}))
+    edge = next(item for item in scene.items() if isinstance(item, RelationItem))
+    assert len(head_items(edge)) == 1
+
+
+def test_navigable_aggregation_self_relation_has_two_heads(
+    app: QApplication,
+) -> None:
+    scene = DiagramScene()
+    build(scene, parse("A o--> A"), Layout(nodes={"A": (0, 0)}))
+    edge = next(item for item in scene.items() if isinstance(item, RelationItem))
+    assert len(head_items(edge)) == 2

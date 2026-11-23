@@ -163,6 +163,9 @@ class RelationItem(QGraphicsPathItem):
             self._head(points[-1], points[-2], "triangle")
         elif kind in ("aggregation", "composition"):
             self._head(points[-1], points[-2], "diamond", filled=kind == "composition")
+            # 방향 있는 집합·합성은 마름모 반대쪽(from_) 끝에 열린 화살촉이 더 붙는다.
+            if self.relation.directed:
+                self._head(points[0], points[1], "open")
         elif kind in ("association", "dependency") and self.relation.directed:
             self._head(points[-1], points[-2], "open")
 

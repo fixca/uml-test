@@ -237,6 +237,8 @@ def test_enum_method_is_still_method() -> None:
         ("B --* A", "composition", "B", "A", False),
         ("A o-- B", "aggregation", "B", "A", False),
         ("B --o A", "aggregation", "B", "A", False),
+        ("A o--> B", "aggregation", "B", "A", True),
+        ("B <--o A", "aggregation", "B", "A", True),
         ("A --> B", "association", "A", "B", True),
         ("B <-- A", "association", "A", "B", True),
         ("A -- B", "association", "A", "B", False),
@@ -395,3 +397,21 @@ def test_performance_30_classes_40_relations() -> None:
     assert d.errors == []
     assert (len(d.classes), len(d.relations)) == (30, 40)
     assert elapsed_ms <= 10
+
+
+def test_navigable_aggregation_multiplicity_and_label() -> None:
+    d = parse('ConcreteSubject o--> "0..*" Observer : notifies')
+    assert d.errors == []
+    rel = d.relations[0]
+    assert (rel.from_, rel.to) == ("Observer", "ConcreteSubject")
+    assert rel.from_multiplicity == "0..*"
+    assert rel.to_multiplicity is None
+    assert rel.label == "notifies"
+    assert rel.directed is True
+    assert rel.layout_key == "Observer->ConcreteSubject"
+
+
+@pytest.mark.parametrize("line", ["A *--> B", "A o..> B"])
+def test_unsupported_navigable_arrows_are_still_errors(line: str) -> None:
+    d = parse(line)
+    assert d.errors and "알 수 없는 화살표입니다" in d.errors[0].message
