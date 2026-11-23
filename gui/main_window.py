@@ -156,6 +156,17 @@ class MainWindow(QMainWindow):
             + QKeySequence.keyBindings(QKeySequence.StandardKey.Redo)
         )
 
+        # 숫자패드 없이 = / - 키로 확대·축소한다. 기존 표준 키도 유지한다.
+        for name, shortcuts in (
+            ("zoom_in", ["Ctrl+=", "Ctrl++", "Ctrl+Shift+=", "Ctrl+Shift++"]),
+            ("zoom_out", ["Ctrl+-"]),
+        ):
+            bindings = [QKeySequence(key) for key in shortcuts] + self.actions[
+                name
+            ].shortcuts()
+            unique = {binding.toString(): binding for binding in bindings}
+            self.actions[name].setShortcuts(list(unique.values()))
+
     def update_state(self) -> None:
         controller = self.controller
         name = (
