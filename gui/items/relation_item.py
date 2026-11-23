@@ -169,12 +169,8 @@ class RelationItem(QGraphicsPathItem):
         elif kind in ("association", "dependency") and self.relation.directed:
             self._head(points[-1], points[-2], "open")
 
-        self._label(
-            self.relation.from_multiplicity, self._near_endpoint(points[0], points[1])
-        )
-        self._label(
-            self.relation.to_multiplicity, self._near_endpoint(points[-1], points[-2])
-        )
+        self._multiplicity(self.relation.from_multiplicity, points[0], self.source)
+        self._multiplicity(self.relation.to_multiplicity, points[-1], self.target)
         self._label(self.relation.label, self._midpoint(points) + QPointF(0, -14))
 
     def _head(
@@ -209,13 +205,37 @@ class RelationItem(QGraphicsPathItem):
         item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         self.decorations.append(item)
 
-    @staticmethod
-    def _near_endpoint(point: QPointF, neighbor: QPointF) -> QPointF:
-        """다중성 라벨을 끝점에서 선 안쪽으로, 선 옆으로 조금 띄운다."""
-        delta = neighbor - point
-        length = hypot(delta.x(), delta.y()) or 1
-        unit = delta / length
-        return point + unit * 40 + QPointF(-unit.y(), unit.x()) * 14
+    def _multiplicity(
+        self, text: str | None, endpoint: QPointF, node: ClassItem
+    ) -> None:
+        """글자 가장자리를 클래스 경계에서 6px 띄워 끝점 옆에 둔다."""
+        if not text:
+            return
+        item = RelationLabel(text, self)
+        item.setBrush(INK)
+        item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        box = node.mapRectToScene(node.rect)
+        width, height = item.boundingRect().width(), item.boundingRect().height()
+        sides = [
+            (
+                abs(endpoint.x() - box.left()),
+                QPointF(box.left() - width - 6, endpoint.y() - height - 10),
+            ),
+            (
+                abs(endpoint.x() - box.right()),
+                QPointF(box.right() + 6, endpoint.y() - height - 10),
+            ),
+            (
+                abs(endpoint.y() - box.top()),
+                QPointF(endpoint.x() + 10, box.top() - height - 6),
+            ),
+            (
+                abs(endpoint.y() - box.bottom()),
+                QPointF(endpoint.x() + 10, box.bottom() + 6),
+            ),
+        ]
+        item.setPos(min(sides, key=lambda side: side[0])[1])
+        self.decorations.append(item)
 
     @staticmethod
     def _midpoint(points: list[QPointF]) -> QPointF:
