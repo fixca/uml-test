@@ -18,10 +18,13 @@ from PyQt6.QtGui import (
     QPolygonF,
 )
 from PyQt6.QtWidgets import (
+    QApplication,
     QGraphicsItem,
     QGraphicsPathItem,
+    QGraphicsSceneContextMenuEvent,
     QGraphicsSceneMouseEvent,
     QGraphicsSimpleTextItem,
+    QMenu,
     QStyleOptionGraphicsItem,
     QWidget,
 )
@@ -72,12 +75,19 @@ class RelationItem(QGraphicsPathItem):
         source: ClassItem,
         target: ClassItem,
         mode: str = "straight",
+        bends: list[tuple[float, float]] | None = None,
     ) -> None:
         super().__init__()
         self.relation = relation
         self.source = source
         self.target = target
         self.mode = mode
+        self.bends = [QPointF(x, y) for x, y in (bends or [])]
+        self.drag_index: int | None = None
+        self.press_point = QPointF()
+        self.setToolTip(
+            "드래그: 꺾임 추가·이동 / 우클릭: 꺾임 제거 / 클릭: 선 모드 전환"
+        )
         # 클래스 박스 뒤에 선을 놓아 박스 내부를 가리지 않게 한다.
         self.setZValue(-1)
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
@@ -93,6 +103,12 @@ class RelationItem(QGraphicsPathItem):
         """장면 좌표로 시작점·꺾이는 점·끝점을 순서대로 반환한다."""
         source = self.source.mapRectToScene(self.source.rect)
         target = self.target.mapRectToScene(self.target.rect)
+        if self.bends:
+            return [
+                _boundary(source, self.bends[0]),
+                *self.bends,
+                _boundary(target, self.bends[-1]),
+            ]
         if self.source is self.target:
             # 자기 관계는 외부 루프가 있어야 보인다. 두 모드 모두 루프로 표시한다.
             start = QPointF(source.right(), source.center().y())
@@ -273,12 +289,125 @@ class RelationItem(QGraphicsPathItem):
         """왼쪽 클릭만 받는다. 아직 선 모드나 layout은 변경하지 않는다."""
         self.pressed = event.button() == Qt.MouseButton.LeftButton
         if self.pressed:
+            self.press_point = event.pos()
+            self.drag_index = None
             event.accept()
         else:
             event.ignore()
 
+    def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        if not self.pressed:
+            event.ignore()
+            return
+        if self.drag_index is None:
+            distance = (
+                event.screenPos() - event.buttonDownScreenPos(Qt.MouseButton.LeftButton)
+            ).manhattanLength()
+            if distance < QApplication.startDragDistance():
+                event.accept()
+                return
+            route = self._route()
+            self.bends = [QPointF(point) for point in route[1:-1]]
+            nearest = min(
+                range(len(self.bends)),
+                key=lambda i: hypot(
+                    (self.bends[i] - self.press_point).x(),
+                    (self.bends[i] - self.press_point).y(),
+                ),
+                default=None,
+            )
+            if (
+                nearest is not None
+                and hypot(
+                    (self.bends[nearest] - self.press_point).x(),
+                    (self.bends[nearest] - self.press_point).y(),
+                )
+                <= 12
+            ):
+                self.drag_index = nearest
+            else:
+                self.drag_index = min(
+                    range(len(route) - 1),
+                    key=lambda i: self._segment_distance(
+                        self.press_point, route[i], route[i + 1]
+                    ),
+                )
+                self.bends.insert(self.drag_index, QPointF(self.press_point))
+        self.bends[self.drag_index] = event.pos()
+        self.update_geometry()
+        event.accept()
+
+    @staticmethod
+    def _segment_distance(point: QPointF, start: QPointF, end: QPointF) -> float:
+        delta = end - start
+        length_squared = delta.x() ** 2 + delta.y() ** 2
+        offset = point - start
+        ratio = (
+            max(
+                0.0,
+                min(
+                    1.0,
+                    (offset.x() * delta.x() + offset.y() * delta.y()) / length_squared,
+                ),
+            )
+            if length_squared
+            else 0.0
+        )
+        distance = point - (start + delta * ratio)
+        return hypot(distance.x(), distance.y())
+
+    def _notify_bends(self) -> None:
+        scene = self.scene()
+        signals = getattr(scene, "signals", None)
+        if signals is None:
+            return
+        key = self.relation.layout_key
+        points = [(point.x(), point.y()) for point in self.bends]
+
+        def notify_controller() -> None:
+            try:
+                if self.scene() is scene:
+                    signals.edge_bent.emit(key, points)
+            except RuntimeError:
+                return
+
+        QTimer.singleShot(0, notify_controller)
+
+    def contextMenuEvent(self, event: QGraphicsSceneContextMenuEvent) -> None:
+        if not self.bends:
+            event.ignore()
+            return
+        menu = QMenu()
+        remove = menu.addAction("가장 가까운 꺾임 제거")
+        reset = menu.addAction("모든 꺾임 제거")
+        nearest = min(
+            range(len(self.bends)),
+            key=lambda i: hypot(
+                (self.bends[i] - event.pos()).x(), (self.bends[i] - event.pos()).y()
+            ),
+        )
+        action = menu.exec(event.screenPos())
+        if action == remove:
+            self.bends.pop(nearest)
+        elif action == reset:
+            self.bends.clear()
+        else:
+            event.accept()
+            return
+        self.update_geometry()
+        self._notify_bends()
+        event.accept()
+
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         """선 위에서 눌렀다가 선 위에서 놓은 경우에만 전환을 요청한다."""
+        if self.pressed and self.drag_index is not None:
+            self.bends[self.drag_index] = event.pos()
+            self.update_geometry()
+            self.pressed = False
+            self.drag_index = None
+            self._notify_bends()
+            event.accept()
+            return
         clicked = self.pressed and self.shape().contains(event.pos())
         self.pressed = False
         event.accept()

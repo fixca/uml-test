@@ -9,6 +9,7 @@ class DiagramSignals(QObject):
     moved = pyqtSignal(str, float, float)
     double_clicked = pyqtSignal(str)
     edge_toggled = pyqtSignal(str)
+    edge_bent = pyqtSignal(str, object)
 
 
 class DiagramScene(QGraphicsScene):

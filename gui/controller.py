@@ -57,6 +57,7 @@ class Controller(QObject):
     def bind_signals(self, signals: DiagramSignals) -> None:
         signals.moved.connect(self.move_node)
         signals.edge_toggled.connect(self.toggle_edge)
+        signals.edge_bent.connect(self.bend_edge)
         signals.double_clicked.connect(self.goto_class)
 
     def snapshot(self) -> Snapshot:
@@ -171,10 +172,40 @@ class Controller(QObject):
             return
         if layout_key not in renderer_for(self.diagram).edge_keys(self.diagram):
             return
+        self.project.layout.bends.pop(layout_key, None)
         edges = self.project.layout.edges
         edges[layout_key] = (
             "straight" if edges.get(layout_key) == "orthogonal" else "orthogonal"
         )
+        self.redraw()
+        self.record()
+
+    def bend_edge(self, layout_key: str, points: object) -> None:
+        if not self.valid or self.diagram is None:
+            self.redraw(announce=False)
+            return
+        if layout_key not in renderer_for(self.diagram).edge_keys(self.diagram):
+            return
+        if not isinstance(points, list) or any(
+            not isinstance(point, tuple | list)
+            or len(point) != 2
+            or not all(
+                isinstance(value, int | float)
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+                for value in point
+            )
+            for point in points
+        ):
+            self.status.emit("꺾임 좌표가 올바르지 않습니다.")
+            self.redraw(announce=False)
+            return
+        if points:
+            self.project.layout.bends[layout_key] = [
+                (float(x), float(y)) for x, y in points
+            ]
+        else:
+            self.project.layout.bends.pop(layout_key, None)
         self.redraw()
         self.record()
 
@@ -319,6 +350,11 @@ class Controller(QObject):
                 key: value
                 for key, value in self.project.layout.nodes.items()
                 if key in nodes
+            }
+            self.project.layout.bends = {
+                key: value
+                for key, value in self.project.layout.bends.items()
+                if key in edges
             }
             self.project.layout.edges = {
                 key: value

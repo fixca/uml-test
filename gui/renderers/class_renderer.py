@@ -85,7 +85,13 @@ class ClassDiagramRenderer(DiagramRenderer):
             source_item = nodes[relation.from_]
             target_item = nodes[relation.to]
             mode = layout.edges.get(relation.layout_key, "straight")
-            relation_item = RelationItem(relation, source_item, target_item, mode)
+            relation_item = RelationItem(
+                relation,
+                source_item,
+                target_item,
+                mode,
+                layout.bends.get(relation.layout_key),
+            )
             scene.addItem(relation_item)
             # 드래그 중에는 모델이나 layout을 바꾸지 않고 선만 따라 움직인다.
             source_item.xChanged.connect(relation_item.update_geometry)
