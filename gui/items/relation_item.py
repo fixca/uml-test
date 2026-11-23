@@ -2,7 +2,7 @@
 
 상속 / 구현 / 연관 / 집합 / 합성 / 의존의 UML 표기를 그린다.
 layout.edges의 모드에 따라 직선 또는 직각 꺾은 선으로 표시한다.
-클릭으로 중앙 조절점을 만들고 점 드래그 결과를 edge_bent 시그널로 전달한다.
+각 선분 클릭으로 중앙 조절점을 추가하고 드래그 결과를 edge_bent로 전달한다.
 """
 
 from itertools import pairwise
@@ -100,7 +100,7 @@ class RelationItem(QGraphicsPathItem):
         self.drag_index: int | None = None
         self.dragged = False
         self.setToolTip(
-            "클릭: 가운데 조절점 표시 / 점 드래그: 경유 위치 변경 / 우클릭: 꺾임 제거"
+            "선분 클릭: 가운데 점 추가 / 점 드래그: 경유 위치 변경 / 우클릭: 꺾임 제거"
         )
         # 클래스 박스 뒤에 선을 놓아 박스 내부를 가리지 않게 한다.
         self.setZValue(-1)
@@ -433,14 +433,20 @@ class RelationItem(QGraphicsPathItem):
         clicked = self.pressed and self.shape().contains(event.pos())
         self.pressed = False
         event.accept()
-        if not clicked or self.bends:
+        if not clicked:
+            return
+        # 이미 있는 점을 클릭한 경우에는 경유점을 중복해서 만들지 않는다.
+        if any(
+            hypot((point - event.pos()).x(), (point - event.pos()).y()) <= 8
+            for point in self.bends
+        ):
             return
         route = self._route()
-        midpoint = self._midpoint(route)
         index = min(
             range(len(route) - 1),
-            key=lambda i: self._segment_distance(midpoint, route[i], route[i + 1]),
+            key=lambda i: self._segment_distance(event.pos(), route[i], route[i + 1]),
         )
+        midpoint = (route[index] + route[index + 1]) / 2
         self.bends = [QPointF(point) for point in route[1:-1]]
         if midpoint not in self.bends:
             self.bends.insert(index, midpoint)

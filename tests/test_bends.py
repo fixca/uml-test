@@ -145,3 +145,46 @@ def test_line_drag_requires_handle_and_click_is_idempotent(window: MainWindow) -
         for child in edge(window).childItems()
         if isinstance(child, BendHandle)
     )
+
+
+def test_split_both_sides_repeatedly(window: MainWindow, tmp_path: Path) -> None:
+    key = edge(window).relation.layout_key
+    # 양쪽 선분과 새 점 사이의 선분을 계속 나눈다.
+    for segment in [0, 0, 2, 1, 3]:
+        item = edge(window)
+        path = item.path()
+        start = path.elementAt(segment)
+        end = path.elementAt(segment + 1)
+        midpoint = QPointF((start.x + end.x) / 2, (start.y + end.y) / 2)
+        before = list(window.controller.project.layout.bends.get(key, []))
+        # 클릭 위치가 가운데가 아니어도 선택한 선분의 절반에 점이 생긴다.
+        click = QPointF(start.x, start.y) * 0.4 + QPointF(end.x, end.y) * 0.6
+        QTest.mouseClick(
+            window.view.viewport(),
+            Qt.MouseButton.LeftButton,
+            pos=window.view.mapFromScene(click),
+        )
+        QApplication.processEvents()
+        expected = before[:]
+        expected.insert(segment, (midpoint.x(), midpoint.y()))
+        assert window.controller.project.layout.bends[key] == expected
+    assert len(edge(window).bends) == 5
+    before = window.controller.snapshot()
+    # 중간 점을 이동해도 앞뒤 점과 그 순서가 유지된다.
+    start = window.view.mapFromScene(edge(window).bends[2])
+    end = start + QPoint(0, 60)
+    QTest.mousePress(window.view.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    QTest.mouseMove(window.view.viewport(), end, delay=20)
+    QTest.mouseRelease(window.view.viewport(), Qt.MouseButton.LeftButton, pos=end)
+    QApplication.processEvents()
+    after = window.controller.snapshot()
+    assert after.layout.bends[key][:2] == before.layout.bends[key][:2]
+    assert after.layout.bends[key][3:] == before.layout.bends[key][3:]
+    assert after.layout.bends[key][2] != before.layout.bends[key][2]
+    window.controller.undo()
+    assert window.controller.snapshot() == before
+    window.controller.redo()
+    assert window.controller.snapshot() == after
+    path = tmp_path / "many-bends.umlproj"
+    save(window.controller.project, str(path))
+    assert load(str(path)).layout.bends == after.layout.bends
