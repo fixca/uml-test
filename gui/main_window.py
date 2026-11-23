@@ -3,7 +3,15 @@
 from pathlib import Path
 
 from PyQt6.QtCore import QSettings, Qt
-from PyQt6.QtGui import QAction, QCloseEvent, QColor, QKeySequence, QPainter, QPalette
+from PyQt6.QtGui import (
+    QAction,
+    QActionGroup,
+    QCloseEvent,
+    QColor,
+    QKeySequence,
+    QPainter,
+    QPalette,
+)
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -15,12 +23,12 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QSplitter,
-    QToolButton,
 )
 
 from gui.canvas import DiagramScene, DiagramView
 from gui.code_editor import CodeEditor
 from gui.controller import Controller
+from gui.theme import apply_scene_theme
 from umlparser import storage
 from umlparser.export import export_scene
 
@@ -79,10 +87,6 @@ class MainWindow(QMainWindow):
         self.actions: dict[str, QAction] = {}
         self.copy_origin: tuple[str, tuple[float, float]] | None = None
         self.create_menus()
-        self.theme_button = QToolButton(self)
-        self.theme_button.setCheckable(True)
-        self.theme_button.setAccessibleName("다크 모드 전환")
-        self.menuBar().setCornerWidget(self.theme_button, Qt.Corner.TopRightCorner)
         stored_theme = self.appearance_settings.value("theme")
         dark = (
             stored_theme == "dark"
@@ -90,7 +94,6 @@ class MainWindow(QMainWindow):
             else self.palette().color(QPalette.ColorRole.Window).lightness() < 128
         )
         self.apply_theme(dark)
-        self.theme_button.clicked.connect(self.change_theme)
         self.controller.set_project(storage.new_project())
         if restore_last:
             path = storage.last_path()
@@ -130,17 +133,16 @@ class MainWindow(QMainWindow):
                 background-color: #2563eb; color: white;
             }}
             QPlainTextEdit {{ background-color: {base}; color: {foreground}; }}
-            QToolButton {{ background-color: {button}; color: {foreground};
-                border: 1px solid #80868b; border-radius: 4px; padding: 4px 10px; }}
-            QToolButton:hover {{ border-color: #2563eb; }}
-            QGraphicsView {{ background-color: white; }}
+            QSplitter::handle {{ background-color: {button}; }}
+            QSplitter::handle:hover {{ background-color: #2563eb; }}
+            QGraphicsView {{ background-color: {base}; }}
         """)
-        self.view.setBackgroundBrush(QColor("white"))
-        self.theme_button.setChecked(dark)
-        self.theme_button.setText("라이트 모드" if dark else "다크 모드")
-        self.theme_button.setToolTip(
-            "라이트 모드로 전환" if dark else "다크 모드로 전환"
-        )
+        self.view.setBackgroundBrush(QColor(base))
+        self.scene.setBackgroundBrush(QColor(base))
+        self.scene.setProperty("dark_mode", dark)
+        apply_scene_theme(self.scene)
+        self.actions["theme_dark"].setChecked(dark)
+        self.actions["theme_light"].setChecked(not dark)
         self.editor.numbers.update()
 
     def change_theme(self, dark: bool) -> None:
@@ -156,6 +158,20 @@ class MainWindow(QMainWindow):
         file_menu = self.menuBar().addMenu("파일")
         edit_menu = self.menuBar().addMenu("편집")
         view_menu = self.menuBar().addMenu("보기")
+        theme_menu = view_menu.addMenu("테마")
+        theme_group = QActionGroup(self)
+        theme_group.setExclusive(True)
+        for name, title in (
+            ("theme_light", "라이트 모드"),
+            ("theme_dark", "다크 모드"),
+        ):
+            action = QAction(title, theme_group)
+            action.setCheckable(True)
+            theme_menu.addAction(action)
+            self.actions[name] = action
+        self.actions["theme_light"].triggered.connect(lambda: self.change_theme(False))
+        self.actions["theme_dark"].triggered.connect(lambda: self.change_theme(True))
+        view_menu.addSeparator()
         entries = [
             (
                 file_menu,
