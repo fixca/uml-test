@@ -64,7 +64,7 @@ class ParticipantItem(QGraphicsRectItem):
             return
         painter.save()
         painter.setPen(QPen(INK, 1.6))
-        painter.setBrush(QBrush(Qt.GlobalColor.white))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawEllipse(QPointF(0, -35), 7, 7)
         body = QPainterPath(QPointF(0, -28))
         body.lineTo(0, -8)
