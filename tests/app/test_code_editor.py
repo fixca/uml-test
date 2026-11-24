@@ -5,7 +5,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtCore import QMimeData, QSignalBlocker
+from PyQt6.QtCore import QMimeData, QSignalBlocker, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
@@ -120,3 +120,26 @@ def test_closing_brace_inserted_when_next_is_not_brace(app: QApplication) -> Non
     editor = CodeEditor()
     QTest.keyClicks(editor, "}")
     assert editor.toPlainText() == "}"
+
+
+def test_tab_inserts_four_spaces(app: QApplication) -> None:
+    editor = CodeEditor()
+    QTest.keyClick(editor, Qt.Key.Key_Tab)
+    assert editor.toPlainText() == "    "
+    assert editor.textCursor().position() == 4
+    assert "\t" not in editor.toPlainText()
+
+
+def test_tab_after_text(app: QApplication) -> None:
+    editor = CodeEditor()
+    QTest.keyClicks(editor, "abc")
+    QTest.keyClick(editor, Qt.Key.Key_Tab)
+    assert editor.toPlainText() == "abc    "
+
+
+def test_tab_replaces_selection(app: QApplication) -> None:
+    editor = CodeEditor()
+    editor.setPlainText("abc")
+    editor.selectAll()
+    QTest.keyClick(editor, Qt.Key.Key_Tab)
+    assert editor.toPlainText() == "    "

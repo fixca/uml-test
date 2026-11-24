@@ -17,6 +17,8 @@ from PyQt6.QtWidgets import QPlainTextEdit, QTextEdit, QWidget
 
 from umlparser.model import ParseError
 
+INDENT = "    "
+
 
 class LineNumbers(QWidget):
     def __init__(self, editor: "CodeEditor") -> None:
@@ -56,6 +58,13 @@ class CodeEditor(QPlainTextEdit):
             event.accept()
         elif event.matches(QKeySequence.StandardKey.Redo):
             self.redo_requested.emit()
+            event.accept()
+        elif event.key() == Qt.Key.Key_Tab and not event.modifiers() & (
+            Qt.KeyboardModifier.ControlModifier
+            | Qt.KeyboardModifier.AltModifier
+            | Qt.KeyboardModifier.MetaModifier
+        ):
+            self.textCursor().insertText(INDENT)
             event.accept()
         elif event.text() == "{":
             self.insert_brace_pair()
