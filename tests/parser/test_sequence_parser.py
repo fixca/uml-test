@@ -76,9 +76,9 @@ def test_self_message_activation() -> None:
 
 
 def test_plain_example_has_no_activations() -> None:
-    code = (
-        Path(__file__).parent.parent / "examples" / "sequence-example.mmd"
-    ).read_text(encoding="utf-8")
+    code = (Path(__file__).parents[2] / "examples" / "sequence-example.mmd").read_text(
+        encoding="utf-8"
+    )
     document = parse(code)
     assert isinstance(document, SequenceDocument)
     assert not document.errors

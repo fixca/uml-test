@@ -67,6 +67,11 @@ uml-tool/
     items/class_item.py        # 클래스 박스 (이도훈)
     items/relation_item.py     # 관계선, 화살표 머리, 다중성 라벨 (이도훈)
   tests/                       # pytest (백엔드 필수, 프론트는 선택)
+    parser/                    #   코드 해석, 모델, 코드 편집 헬퍼 (Qt 없음)
+    storage/                   #   프로젝트 저장·불러오기, 이미지 내보내기
+    diagram/                   #   다이어그램 그리기와 자동 배치
+    interaction/               #   캔버스 마우스·키보드 조작
+    app/                       #   코드 편집기, 메인 창, 전체 흐름
   examples/class-example.mmd
 ```
 - Python 3.11 이상, 외부 패키지는 **PyQt6만** 사용 (Graphviz 등 추가 금지. 필요하면 총괄 승인)
