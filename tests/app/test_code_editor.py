@@ -6,6 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PyQt6.QtCore import QMimeData, QSignalBlocker
+from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from gui.code_editor import CodeEditor
@@ -83,3 +84,39 @@ def test_paste_blank_line_and_selection_preserve_original(app: QApplication) -> 
     editor.insertFromMimeData(mime)
     assert "class A\nclass D\nclass B" in editor.toPlainText()
     editor.deleteLater()
+
+
+def test_open_brace_inserts_pair(app: QApplication) -> None:
+    editor = CodeEditor()
+    QTest.keyClicks(editor, "{")
+    assert editor.toPlainText() == "{}"
+    assert editor.textCursor().position() == 1
+
+
+def test_open_brace_after_text(app: QApplication) -> None:
+    editor = CodeEditor()
+    QTest.keyClicks(editor, "class A {")
+    assert editor.toPlainText() == "class A {}"
+    assert editor.textCursor().position() == len("class A {")
+
+
+def test_closing_brace_skips_over_existing(app: QApplication) -> None:
+    editor = CodeEditor()
+    QTest.keyClicks(editor, "{}")
+    assert editor.toPlainText() == "{}"
+    assert editor.textCursor().position() == 2
+
+
+def test_open_brace_wraps_selection(app: QApplication) -> None:
+    editor = CodeEditor()
+    editor.setPlainText("abc")
+    editor.selectAll()
+    QTest.keyClicks(editor, "{")
+    assert editor.toPlainText() == "{abc}"
+    assert editor.textCursor().position() == 4
+
+
+def test_closing_brace_inserted_when_next_is_not_brace(app: QApplication) -> None:
+    editor = CodeEditor()
+    QTest.keyClicks(editor, "}")
+    assert editor.toPlainText() == "}"

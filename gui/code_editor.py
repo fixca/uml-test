@@ -57,8 +57,34 @@ class CodeEditor(QPlainTextEdit):
         elif event.matches(QKeySequence.StandardKey.Redo):
             self.redo_requested.emit()
             event.accept()
+        elif event.text() == "{":
+            self.insert_brace_pair()
+            event.accept()
+        elif event.text() == "}" and self.skip_closing_brace():
+            event.accept()
         else:
             super().keyPressEvent(event)
+
+    def insert_brace_pair(self) -> None:
+        """`{`를 입력하면 `}`를 함께 넣고 커서를 둘 사이에 둔다."""
+        cursor = self.textCursor()
+        selected = cursor.selectedText()
+        cursor.beginEditBlock()
+        cursor.insertText("{" + selected + "}")
+        cursor.movePosition(QTextCursor.MoveOperation.Left)
+        cursor.endEditBlock()
+        self.setTextCursor(cursor)
+
+    def skip_closing_brace(self) -> bool:
+        """커서 바로 뒤가 `}`이면 새로 넣지 않고 한 칸 건너뛴다."""
+        cursor = self.textCursor()
+        if cursor.hasSelection():
+            return False
+        if self.document().characterAt(cursor.position()) != "}":
+            return False
+        cursor.movePosition(QTextCursor.MoveOperation.Right)
+        self.setTextCursor(cursor)
+        return True
 
     def insertFromMimeData(self, source: QMimeData) -> None:
         """붙여넣은 코드가 현재 문장과 합쳐지지 않도록 별도 줄에 삽입한다."""
