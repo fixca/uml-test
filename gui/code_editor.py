@@ -66,6 +66,12 @@ class CodeEditor(QPlainTextEdit):
         ):
             self.textCursor().insertText(INDENT)
             event.accept()
+        elif (
+            event.key() == Qt.Key.Key_Backspace
+            and not event.modifiers()
+            and self.delete_indent()
+        ):
+            event.accept()
         elif event.text() == "{":
             self.insert_brace_pair()
             event.accept()
@@ -73,6 +79,22 @@ class CodeEditor(QPlainTextEdit):
             event.accept()
         else:
             super().keyPressEvent(event)
+
+    def delete_indent(self) -> bool:
+        """커서 앞이 같은 줄의 공백 4칸이면 한 번에 지우고 True를 돌려준다."""
+        cursor = self.textCursor()
+        if cursor.hasSelection() or cursor.positionInBlock() < len(INDENT):
+            return False
+        cursor.movePosition(
+            QTextCursor.MoveOperation.Left,
+            QTextCursor.MoveMode.KeepAnchor,
+            len(INDENT),
+        )
+        if cursor.selectedText() != INDENT:
+            return False
+        cursor.removeSelectedText()
+        self.setTextCursor(cursor)
+        return True
 
     def insert_brace_pair(self) -> None:
         """`{`를 입력하면 `}`를 함께 넣고 커서를 둘 사이에 둔다."""

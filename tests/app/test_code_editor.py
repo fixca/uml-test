@@ -143,3 +143,57 @@ def test_tab_replaces_selection(app: QApplication) -> None:
     editor.selectAll()
     QTest.keyClick(editor, Qt.Key.Key_Tab)
     assert editor.toPlainText() == "    "
+
+
+def test_backspace_removes_tab_indent(app: QApplication) -> None:
+    editor = CodeEditor()
+    QTest.keyClick(editor, Qt.Key.Key_Tab)
+    QTest.keyClick(editor, Qt.Key.Key_Backspace)
+    assert editor.toPlainText() == ""
+
+
+def test_backspace_removes_indent_after_text(app: QApplication) -> None:
+    editor = CodeEditor()
+    QTest.keyClicks(editor, "abc")
+    QTest.keyClick(editor, Qt.Key.Key_Tab)
+    QTest.keyClick(editor, Qt.Key.Key_Backspace)
+    assert editor.toPlainText() == "abc"
+
+
+def test_backspace_removes_only_one_indent(app: QApplication) -> None:
+    editor = CodeEditor()
+    QTest.keyClick(editor, Qt.Key.Key_Tab)
+    QTest.keyClick(editor, Qt.Key.Key_Tab)
+    QTest.keyClick(editor, Qt.Key.Key_Backspace)
+    assert editor.toPlainText() == "    "
+
+
+def test_backspace_removes_one_space_when_fewer_than_four(app: QApplication) -> None:
+    editor = CodeEditor()
+    QTest.keyClicks(editor, "  ")
+    QTest.keyClick(editor, Qt.Key.Key_Backspace)
+    assert editor.toPlainText() == " "
+
+
+def test_backspace_removes_only_selection(app: QApplication) -> None:
+    editor = CodeEditor()
+    editor.setPlainText("    ")
+    editor.selectAll()
+    QTest.keyClick(editor, Qt.Key.Key_Backspace)
+    assert editor.toPlainText() == ""
+    editor.setPlainText("     ")
+    cursor = editor.textCursor()
+    cursor.setPosition(1, cursor.MoveMode.KeepAnchor)
+    editor.setTextCursor(cursor)
+    QTest.keyClick(editor, Qt.Key.Key_Backspace)
+    assert editor.toPlainText() == "    "
+
+
+def test_backspace_at_line_start_joins_lines(app: QApplication) -> None:
+    editor = CodeEditor()
+    editor.setPlainText("a\nb")
+    cursor = editor.textCursor()
+    cursor.setPosition(2)
+    editor.setTextCursor(cursor)
+    QTest.keyClick(editor, Qt.Key.Key_Backspace)
+    assert editor.toPlainText() == "ab"
