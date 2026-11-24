@@ -139,7 +139,7 @@ def test_percent_inside_quotes_is_kept() -> None:
 
 
 def test_example_file_parses_without_errors() -> None:
-    path = Path(__file__).parent.parent / "examples" / "class-example.mmd"
+    path = Path(__file__).parents[2] / "examples" / "class-example.mmd"
     d = parse(path.read_text(encoding="utf-8"))
     assert d.errors == []
     assert [(r.from_, r.kind, r.to) for r in d.relations] == [

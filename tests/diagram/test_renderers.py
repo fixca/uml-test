@@ -25,7 +25,7 @@ from umlparser import parse
 from umlparser.model import ParseError
 from umlparser.storage import Layout
 
-EXAMPLE = Path(__file__).parent.parent / "examples" / "class-example.mmd"
+EXAMPLE = Path(__file__).parents[2] / "examples" / "class-example.mmd"
 
 
 @dataclass
