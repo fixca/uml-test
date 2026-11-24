@@ -104,7 +104,7 @@ class CodeEditor(QPlainTextEdit):
         selected = cursor.selectedText()
         cursor.beginEditBlock()
         cursor.insertText("{" + selected + "}")
-        cursor.movePosition(QTextCursor.MoveOperation.Left)
+        cursor.movePosition(QTextCursor.MoveOperation.PreviousCharacter)
         cursor.endEditBlock()
         self.setTextCursor(cursor)
 
@@ -115,7 +115,7 @@ class CodeEditor(QPlainTextEdit):
             return False
         if self.document().characterAt(cursor.position()) != "}":
             return False
-        cursor.movePosition(QTextCursor.MoveOperation.Right)
+        cursor.movePosition(QTextCursor.MoveOperation.NextCharacter)
         self.setTextCursor(cursor)
         return True
 

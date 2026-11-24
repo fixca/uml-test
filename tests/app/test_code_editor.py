@@ -219,3 +219,21 @@ def test_backspace_removes_indent_before_text_in_rtl_line(app: QApplication) -> 
     set_cursor(editor, 7)
     QTest.keyClick(editor, Qt.Key.Key_Backspace)
     assert editor.toPlainText() == "אבגxyz"
+
+
+def test_open_brace_cursor_is_logical_after_rtl_text(app: QApplication) -> None:
+    editor = CodeEditor()
+    editor.setPlainText("אבג")
+    set_cursor(editor, 3)
+    QTest.keyClicks(editor, "{")
+    assert editor.toPlainText() == "אבג{}"
+    assert editor.textCursor().position() == 4
+
+
+def test_closing_brace_skip_is_logical_in_rtl_line(app: QApplication) -> None:
+    editor = CodeEditor()
+    editor.setPlainText("אבג{}")
+    set_cursor(editor, 4)
+    QTest.keyClicks(editor, "}")
+    assert editor.toPlainText() == "אבג{}"
+    assert editor.textCursor().position() == 5
