@@ -85,13 +85,15 @@ class CodeEditor(QPlainTextEdit):
         cursor = self.textCursor()
         if cursor.hasSelection() or cursor.positionInBlock() < len(INDENT):
             return False
-        cursor.movePosition(
-            QTextCursor.MoveOperation.Left,
-            QTextCursor.MoveMode.KeepAnchor,
-            len(INDENT),
-        )
-        if cursor.selectedText() != INDENT:
+        start = cursor.position() - len(INDENT)
+        if (
+            cursor.block().text()[cursor.positionInBlock() - len(INDENT) :][
+                : len(INDENT)
+            ]
+            != INDENT
+        ):
             return False
+        cursor.setPosition(start, QTextCursor.MoveMode.KeepAnchor)
         cursor.removeSelectedText()
         self.setTextCursor(cursor)
         return True

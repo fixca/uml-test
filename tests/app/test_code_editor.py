@@ -197,3 +197,25 @@ def test_backspace_at_line_start_joins_lines(app: QApplication) -> None:
     editor.setTextCursor(cursor)
     QTest.keyClick(editor, Qt.Key.Key_Backspace)
     assert editor.toPlainText() == "ab"
+
+
+def set_cursor(editor: CodeEditor, position: int) -> None:
+    cursor = editor.textCursor()
+    cursor.setPosition(position)
+    editor.setTextCursor(cursor)
+
+
+def test_backspace_ignores_spaces_after_cursor_in_rtl_line(app: QApplication) -> None:
+    editor = CodeEditor()
+    editor.setPlainText("אבגxא    ")
+    set_cursor(editor, 5)
+    QTest.keyClick(editor, Qt.Key.Key_Backspace)
+    assert editor.toPlainText() == "אבגx    "
+
+
+def test_backspace_removes_indent_before_text_in_rtl_line(app: QApplication) -> None:
+    editor = CodeEditor()
+    editor.setPlainText("אבג    xyz")
+    set_cursor(editor, 7)
+    QTest.keyClick(editor, Qt.Key.Key_Backspace)
+    assert editor.toPlainText() == "אבגxyz"
