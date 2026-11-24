@@ -41,6 +41,7 @@ class ModelError(ValueError):
 
 
 def _require_dict(data: Any, where: str) -> dict[str, Any]:
+    """값이 dict가 아니면 where를 밝혀 ModelError를 낸다."""
     if not isinstance(data, dict):
         raise ModelError(f"{where}: 객체(dict)여야 합니다.")
     return data
@@ -75,7 +76,7 @@ def _get_int(
     data: dict[str, Any], key: str, where: str, default: int | None = None
 ) -> int:
     value = data.get(key, default)
-    # bool은 int의 하위 타입이므로 따로 막는다.
+    # True/False를 정수로 받아들이지 않도록 막는다.
     if isinstance(value, bool) or not isinstance(value, int):
         raise ModelError(f"{where}.{key}: 정수여야 합니다.")
     return value
@@ -107,6 +108,7 @@ def _get_choice(
 
 
 def _get_source(data: dict[str, Any], where: str) -> Source:
+    """data의 source를 읽는다. 없으면 기본 위치를 쓴다."""
     if "source" not in data:
         return Source()
     return Source.from_dict(data["source"], f"{where}.source")
@@ -119,7 +121,7 @@ def _get_source(data: dict[str, Any], where: str) -> Source:
 
 @dataclass
 class Source:
-    """코드 위치. 줄 번호는 1부터 센다."""
+    """모델 요소가 정의된 원문 줄 범위. 줄 번호는 1부터 센다."""
 
     line: int = 1
     end_line: int = 1

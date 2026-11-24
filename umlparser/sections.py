@@ -11,10 +11,12 @@ class Sections:
 
     @property
     def class_code(self) -> str:
+        """시퀀스 구간을 빈 줄로 채운 클래스 원문. 줄 번호는 원문과 같게 유지한다."""
         return self.before + "\n" * self.sequence.count("\n") + self.after
 
 
 def split_sections(code: str) -> Sections | None:
+    """원문에서 sequenceDiagram 구간을 떼어 낸다. 헤더가 없으면 None을 돌려준다."""
     lines = code.splitlines(keepends=True)
     start = next(
         (

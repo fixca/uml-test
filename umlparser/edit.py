@@ -112,6 +112,7 @@ def append_class(code: str, block: str, new_id: str) -> str:
 
 
 def _is_header(line: str) -> bool:
+    """주석을 뺀 줄이 sequenceDiagram 헤더인지 알려 준다."""
     return line.partition("%%")[0].strip() == "sequenceDiagram"
 
 
@@ -154,7 +155,7 @@ def reorder_participants(code: str, order: list[str]) -> str:
     if first_content is not None:
         indent = first_content[: len(first_content) - len(first_content.lstrip())]
 
-    # 선언 줄은 원래 글자 그대로 꺼내고, 암시적 참여자는 새 선언 줄을 만든다.
+    # 기존 선언 줄은 글자 그대로 옮기고, 선언 없이 쓰인 참여자는 새 선언 줄을 만든다.
     declared: dict[str, str] = {}
     for participant in participants.values():
         if participant.implicit:
@@ -176,7 +177,7 @@ def reorder_participants(code: str, order: list[str]) -> str:
     rest = [line for i, line in enumerate(lines) if i not in removed]
     result = "".join(rest[: header + 1] + block + rest[header + 1 :])
 
-    # 다시 읽어 순서와 표시 이름이 의도대로가 아니면 원문을 유지한다.
+    # 의도한 순서와 표시 이름이 유지됐는지 확인하고, 아니면 원문을 돌려준다.
     check = parse_document(result)
     if (
         not isinstance(check, SequenceDocument)

@@ -19,12 +19,12 @@ def build(scene: QGraphicsScene, diagram: Diagram, layout: Layout) -> None:
     렌더러가 아직 지원하지 않는 종류면 NotImplementedError가 전달된다.
     오류 줄과 상태줄 메시지 표시는 기존 컨트롤러·편집기가 담당한다.
     """
-    # 오류 모델은 정상 그림과 저장된 배치를 덮어쓰지 않는다.
-    # 컨트롤러도 같은 정책을 쓰지만 직접 호출하는 경우까지 보호한다.
+    # 오류 모델이면 마지막 정상 그림과 저장된 배치를 그대로 보존한다.
+    # (컨트롤러도 막지만 직접 호출하는 경우를 위해 한 번 더 확인한다.)
     if diagram.errors:
         return
 
-    # 기존 장면의 시그널 객체를 재사용해 컨트롤러 연결을 유지한다.
+    # 다시 그려도 컨트롤러가 연결한 시그널이 끊기지 않도록 장면의 시그널을 유지한다.
     signals = getattr(scene, "signals", None)
     if signals is None:
         signals = DiagramSignals(scene)

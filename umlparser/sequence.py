@@ -69,8 +69,9 @@ _MESSAGE = re.compile(
 
 
 def read_sequence(lines: list[tuple[int, str]], document: SequenceDocument) -> None:
+    """시퀀스 구간의 줄을 읽어 참여자·메시지·활성 구간을 채우고 오류를 모은다."""
     sequence = document.sequence
-    # 참여자별 열린 활성 구간의 시작 메시지 순번
+    # 참여자별로 아직 닫히지 않은 활성 구간을 추적한다.
     stacks: dict[str, list[int]] = {}
     for number, raw in lines:
         line = raw.strip()

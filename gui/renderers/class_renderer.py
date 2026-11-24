@@ -19,6 +19,7 @@ from umlparser.storage import Layout
 def object_states(
     scene: QGraphicsScene,
 ) -> dict[tuple[str, str], tuple[object, QPointF]]:
+    """장면의 클래스와 관계선 상태를 모은다. 이전 그림이 있었는지 판별에 쓴다."""
     states = {}
     for item in scene.items(Qt.SortOrder.AscendingOrder):
         if isinstance(item, ClassItem):
@@ -45,27 +46,28 @@ class ClassDiagramRenderer(DiagramRenderer):
         layout: Layout,
         signals: DiagramSignals,
     ) -> None:
-        """수동 좌표와 scene.signals를 보존하고 누락된 초기 좌표만 채운다.
+        """클래스 다이어그램을 장면에 다시 그린다.
 
-        오류가 없는 빈 모델은 장면을 비운다. 끝점이 없는 관계는 해당
-        선만 건너뛴다. 클래스 다이어그램이 아니면 TypeError를 던진다.
+        사용자가 놓은 위치와 scene.signals는 그대로 두고 좌표가 없는 클래스만
+        새로 배치한다. 오류가 없는 빈 모델은 장면을 비우고, 끝점이 없는 관계는
+        그 선만 건너뛴다. 클래스 다이어그램이 아니면 TypeError를 던진다.
         """
         if not isinstance(diagram, ClassDiagram):
             raise TypeError("ClassDiagram만 그릴 수 있습니다.")
-        # scene.clear() 전에 선택 ID를 보관해 같은 클래스를 다시 선택한다.
+        # 다시 그린 뒤에도 같은 클래스가 선택된 채 남도록 선택 상태를 기억한다.
         selected = {
             item.data(0)
             for item in scene.selectedItems()
             if isinstance(item.data(0), str)
         }
-        # 박스 크기가 있어야 자동 배치 간격을 계산할 수 있다.
+        # 자동 배치에 필요한 클래스별 박스 크기를 먼저 구한다.
         nodes = {node.id: ClassItem(node) for node in diagram.classes}
         sizes = {
             key: (item.rect.width(), item.rect.height()) for key, item in nodes.items()
         }
-        # 새 좌표만 layout에 채우고 수동 위치는 보존한다.
+        # 좌표가 없는 클래스에만 위치를 정해 사용자가 놓은 위치를 보존한다.
         fill_missing_positions(diagram, layout, sizes)
-        # 장면 객체 자체는 유지하므로 scene.signals와 컨트롤러 연결도 유지된다.
+        # 선택된 관계선과 이전 그림을 기억해 둔다. (장면 객체는 유지된다.)
         selected_edges = {
             item.relation.layout_key
             for item in scene.selectedItems()
@@ -77,14 +79,14 @@ class ClassDiagramRenderer(DiagramRenderer):
             item.setPos(*layout.nodes[class_id])
             scene.addItem(item)
             item.setSelected(class_id in selected)
-            # 컨트롤러가 장면을 비워도 마우스 이벤트가 먼저 끝나도록 지연 전달한다.
+            # 이동·더블클릭을 장면 시그널로 전달한다. 이벤트가 끝난 뒤 처리한다.
             item.moved.connect(signals.moved, Qt.ConnectionType.QueuedConnection)
             item.double_clicked.connect(
                 signals.double_clicked, Qt.ConnectionType.QueuedConnection
             )
-        # 끝점 박스를 모두 만든 뒤 관계선을 생성한다.
+        # 관계선은 양 끝 클래스가 모두 만들어진 뒤에 그린다.
         for relation in diagram.relations:
-            # 부분 모델에 끝점이 없는 관계가 있으면 해당 선만 건너뛴다.
+            # 오류로 일부만 읽힌 모델에서 끝점 클래스가 없으면 그 선은 그리지 않는다.
             if relation.from_ not in nodes or relation.to not in nodes:
                 continue
             source_item = nodes[relation.from_]
@@ -99,20 +101,20 @@ class ClassDiagramRenderer(DiagramRenderer):
             )
             scene.addItem(relation_item)
             relation_item.setSelected(relation.layout_key in selected_edges)
-            # 드래그 중에는 모델이나 layout을 바꾸지 않고 선만 따라 움직인다.
+            # 클래스를 끄는 동안 연결된 관계선이 따라 움직이게 한다.
             source_item.xChanged.connect(relation_item.update_geometry)
             source_item.yChanged.connect(relation_item.update_geometry)
-            # 자기 관계는 같은 박스에 중복 연결하지 않는다.
+            # 자기 자신으로 가는 관계는 한 번만 연결한다.
             if target_item is not source_item:
                 target_item.xChanged.connect(relation_item.update_geometry)
                 target_item.yChanged.connect(relation_item.update_geometry)
-        # 이전 그림이 더 컸더라도 현재 그림에 맞춰 스크롤 영역을 다시 줄인다.
+        # 장면 크기를 현재 그림에 맞춰 스크롤 영역이 필요 이상으로 남지 않게 한다.
         bounds = scene.itemsBoundingRect()
         scene.setSceneRect(
             bounds.adjusted(-40, -40, 40, 40) if nodes else QRectF(0, 0, 80, 80)
         )
 
-        # 객체 변경에 따른 화면 이동은 논의 후 기능 추가 여부를 결정한다.
+        # 처음 그릴 때는 그림을 화면 가운데에 보인다. 변경 위치로 옮기기는 보류 중이다.
         # states = object_states(scene)
         for view in scene.views():
             if not isinstance(view, DiagramView):
@@ -131,28 +133,32 @@ class ClassDiagramRenderer(DiagramRenderer):
             #         break
 
     def node_ids(self, diagram: Diagram) -> set[str]:
+        """클래스 다이어그램의 모든 클래스 ID를 돌려준다."""
         if not isinstance(diagram, ClassDiagram):
             return set()
         return {node.id for node in diagram.classes}
 
     def edge_keys(self, diagram: Diagram) -> set[str]:
+        """클래스 다이어그램의 모든 관계선 layout key를 돌려준다."""
         if not isinstance(diagram, ClassDiagram):
             return set()
         return {relation.layout_key for relation in diagram.relations}
 
     def source_line(self, diagram: Diagram, node_id: str) -> int | None:
+        """클래스가 정의된 원문 줄 번호를 돌려준다."""
         if not isinstance(diagram, ClassDiagram):
             return None
         for node in diagram.classes:
             if node.id == node_id and node.source:
-                # Source는 위치 객체이므로 정수 줄 번호만 돌려준다.
                 return node.source.line
         return None
 
     def copy_block(self, code: str, node_id: str) -> str | None:
+        """클래스 정의를 복사용 원문 블록으로 돌려준다. 찾지 못하면 None."""
         return class_block(code, node_id) or None
 
     def paste_block(self, code: str, diagram: Diagram, block: str) -> tuple[str, str]:
+        """클래스 정의 하나를 이름이 겹치지 않게 바꿔 원문 끝에 붙인다."""
         if not isinstance(diagram, ClassDiagram):
             raise PasteError("이 다이어그램에서는 클래스를 붙여넣을 수 없습니다.")
         fragment = parse("classDiagram\n" + block)

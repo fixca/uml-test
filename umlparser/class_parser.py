@@ -235,12 +235,14 @@ def _split_top_level(text: str) -> list[str]:
 
 
 def _split_visibility(text: str) -> tuple[Visibility, str]:
+    """멤버 앞의 가시성 기호(+ - # ~)를 떼어 기호와 나머지 글자를 돌려준다."""
     if text and text[0] in _VISIBILITY_CHARS:
         return cast(Visibility, text[0]), text[1:].lstrip()
     return "", text
 
 
 def _blank_to_none(text: str | None) -> str | None:
+    """비었거나 공백뿐인 글자를 None으로 바꾼다."""
     if text is None:
         return None
     return text.strip() or None
@@ -252,6 +254,7 @@ def _blank_to_none(text: str | None) -> str | None:
 
 
 def _parse_param(text: str) -> Param:
+    """파라미터 한 개(`int id` 또는 `id: int`)를 이름과 타입으로 나눈다."""
     if ":" in text:
         name, type_ = (s.strip() for s in text.split(":", 1))
     else:
@@ -264,6 +267,7 @@ def _parse_param(text: str) -> Param:
 
 
 def _parse_method(visibility: Visibility, text: str, source: Source) -> Method:
+    """멤버 줄 하나를 메서드(이름, 파라미터, 반환형, 정적·추상 표시)로 읽는다."""
     match = _METHOD_RE.match(_tilde_to_angle(text))
     if match is None:
         raise _LineError("메서드 형식이 올바르지 않습니다. 이름과 괄호를 확인하세요.")
@@ -287,6 +291,7 @@ def _parse_method(visibility: Visibility, text: str, source: Source) -> Method:
 
 
 def _parse_attribute(visibility: Visibility, text: str, source: Source) -> Attribute:
+    """멤버 줄 하나를 속성(이름, 타입, 정적 표시)으로 읽는다."""
     is_static = False
     while text and text[-1] in "$*":
         is_static = is_static or text[-1] == "$"
@@ -337,6 +342,7 @@ def _apply_members(draft: _ClassDraft, state: _State) -> None:
 
 
 def _set_kind(draft: _ClassDraft, annotation: str) -> None:
+    """`<<interface>>` 같은 스테레오타입에 맞게 클래스 종류를 정한다."""
     kind = _ANNOTATION_KINDS.get(annotation.lower())
     if kind is None:
         raise _LineError(
@@ -348,6 +354,7 @@ def _set_kind(draft: _ClassDraft, annotation: str) -> None:
 
 
 def _close_block(state: _State, end_line: int) -> None:
+    """열려 있는 클래스 블록을 닫고 그 클래스의 끝 줄을 기록한다."""
     if state.block is not None:
         node = state.block.draft.node
         node.source = Source(node.source.line, max(node.source.line, end_line))
@@ -355,6 +362,7 @@ def _close_block(state: _State, end_line: int) -> None:
 
 
 def _report_unclosed(state: _State, end_line: int) -> None:
+    """닫히지 않은 클래스 블록이 있으면 오류로 알리고 닫는다."""
     block = state.block
     if block is None:
         return
@@ -367,6 +375,7 @@ def _report_unclosed(state: _State, end_line: int) -> None:
 
 
 def _handle_class(state: _State, text: str, line: int, indent: int) -> None:
+    """`class` 선언 줄을 읽어 클래스를 만들고, `{`로 열리면 멤버 블록을 시작한다."""
     match = _CLASS_RE.match(text)
     if match is None:
         raise _LineError("클래스 선언 형식이 올바르지 않습니다. 예: class User {", 0)
@@ -405,6 +414,7 @@ def _handle_class(state: _State, text: str, line: int, indent: int) -> None:
 
 
 def _handle_relation(state: _State, match: re.Match[str], line: int) -> None:
+    """관계 줄을 읽어 방향을 정규화한 Relation을 더하고, 끝점 클래스도 만든다."""
     arrow = match["arrow"]
     if arrow not in _ARROWS:
         raise _LineError(f"알 수 없는 화살표입니다: {arrow}", match.start("arrow"))
@@ -419,6 +429,7 @@ def _handle_relation(state: _State, match: re.Match[str], line: int) -> None:
     for class_id in (a, b):
         state.class_draft(class_id, line, implicit=True)
 
+    # 같은 두 클래스 사이의 관계가 여럿이어도 배치를 따로 저장할 수 있게 키를 구분한다.
     base_key = f"{from_}->{to}"
     count = state.layout_counts.get(base_key, 0) + 1
     state.layout_counts[base_key] = count
@@ -465,11 +476,13 @@ def _handle_block_line(state: _State, text: str, line: int, indent: int) -> bool
 
 
 def _known_relation(text: str) -> bool:
+    """줄이 지원하는 화살표를 쓴 관계 문장인지 알려 준다."""
     match = _RELATION_RE.match(text)
     return match is not None and match["arrow"] in _ARROWS
 
 
 def _handle_statement(state: _State, text: str, line: int, indent: int) -> None:
+    """블록 밖의 한 문장(머리말, 클래스, 스테레오타입, 관계, `X : 멤버`)을 처리한다."""
     if _HEADER_RE.match(text):
         if state.seen_statement:
             raise _LineError("classDiagram은 첫 줄에만 쓸 수 있습니다.")
@@ -525,6 +538,7 @@ def _strip_comment(raw: str) -> str:
 
 
 def _handle_line(state: _State, raw: str, line: int) -> None:
+    """한 줄에서 주석을 지우고 처리하며, 문법 오류는 줄·칸 위치와 함께 모은다."""
     raw = _strip_comment(raw)
     text = raw.strip()
     if not text:

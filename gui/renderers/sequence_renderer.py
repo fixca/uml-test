@@ -23,6 +23,8 @@ from umlparser.storage import Layout
 
 
 class ParticipantItem(QGraphicsRectItem):
+    """시퀀스 참여자의 머리 상자(또는 사람 모양). 좌우로 끌어 참여자 순서를 바꾼다."""
+
     def __init__(
         self,
         participant: Participant,
@@ -50,7 +52,7 @@ class ParticipantItem(QGraphicsRectItem):
         label = QGraphicsSimpleTextItem(caption, self)
         label.setPos(-label.boundingRect().width() / 2, 12)
         label.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
-        label.setZValue(2)  # 활성 구간보다 위에 둔다.
+        label.setZValue(2)  # 글자가 활성 구간에 가려지지 않게 한다.
         self.setZValue(2)
 
     def paint(
@@ -59,6 +61,7 @@ class ParticipantItem(QGraphicsRectItem):
         option: QStyleOptionGraphicsItem,
         widget: QWidget | None = None,
     ) -> None:
+        """참여자를 상자로, actor는 사람 모양으로 그린다."""
         if not self.is_actor:
             super().paint(painter, option, widget)
             return
@@ -81,6 +84,7 @@ class ParticipantItem(QGraphicsRectItem):
         painter.restore()
 
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        """끌기를 시작할 때 누른 위치를 기억해 둔다."""
         super().mousePressEvent(event)
         self.press_x = event.scenePos().x()
         self.grab_offset = event.scenePos().x() - self.x()
@@ -88,10 +92,12 @@ class ParticipantItem(QGraphicsRectItem):
         event.accept()
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        """끄는 동안 참여자를 마우스를 따라 좌우로 움직인다."""
         self.setX(event.scenePos().x() - self.grab_offset)
         event.accept()
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        """끌기를 끝내면 놓인 열 번호를 컨트롤러에 알려 참여자 순서를 바꾸게 한다."""
         super().mouseReleaseEvent(event)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         if abs(event.scenePos().x() - self.press_x) < 1:
@@ -124,19 +130,19 @@ class ActivationItem(QGraphicsRectItem):
         self.activation = activation
         self.setBrush(QBrush(Qt.GlobalColor.white))
         self.setPen(QPen(INK, 1.4))
-        self.setZValue(1)  # 생명선 위, 머리 글자 아래
+        self.setZValue(1)  # 생명선 위, 참여자 이름 아래에 그린다.
         self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
 
 
 def is_closed(sequence: Sequence, activation: Activation) -> bool:
-    """끝 메시지에서 실제로 `-`로 닫힌 구간인지(닫히지 않은 구간은 마지막에서 끝남)."""
+    """활성 구간이 `-`로 닫혔는지 알려 준다. 안 닫힌 구간은 마지막 메시지에서 끝난다."""
     last = len(sequence.messages) - 1
     if activation.end < last:
         return True
     message = sequence.messages[activation.end]
     if not message.deactivate or message.sender != activation.participant:
         return False
-    # 마지막 메시지가 닫는 구간은 같은 끝 순번 중 가장 깊은 구간이다.
+    # 마지막 메시지의 `-`는 같은 시점에 끝나는 구간 중 가장 안쪽 구간만 닫는다.
     deepest = max(
         a.depth
         for a in sequence.activations
@@ -146,7 +152,10 @@ def is_closed(sequence: Sequence, activation: Activation) -> bool:
 
 
 def edge_offset(sequence: Sequence, name: str, index: int, toward_right: bool) -> float:
-    """메시지 순번에 name이 활성 중이면 선이 닿을 활성 사각형 바깥 변의 x 오프셋."""
+    """참여자가 활성 중이면 메시지 선을 생명선 중심에서 비껴 닿게 할 x 간격을 돌려준다.
+
+    가장 깊은 활성 구간 기준이며, 활성이 아니면 0이다.
+    """
     depths = [
         a.depth
         for a in sequence.activations
@@ -164,6 +173,7 @@ def draw_sequence(
     top: float,
     signals: DiagramSignals,
 ) -> None:
+    """참여자 머리 상자·생명선·활성 구간과 시간순 메시지 화살표를 장면에 그린다."""
     metrics = QFontMetricsF(scene.font())
     width = max(
         [100.0]
@@ -179,7 +189,7 @@ def draw_sequence(
     columns = {}
     dashed = QPen(Qt.GlobalColor.darkGray)
     dashed.setStyle(Qt.PenStyle.DashLine)
-    # 열 순서는 코드의 참여자 순서(선언 또는 처음 등장한 순서)를 따른다.
+    # 참여자를 코드의 순서대로 왼쪽부터 열로 나열한다.
     for index, participant in enumerate(sequence.participants.values()):
         x = width / 2 + index * spacing
         columns[participant.id] = x
@@ -193,7 +203,7 @@ def draw_sequence(
         for activation in sequence.activations:
             if activation.participant != participant.id:
                 continue
-            # 머리 상자 기준 좌표. 메시지 y는 top + 84 + 64 * 순번이다.
+            # 활성 구간이 시작·끝 메시지의 높이에 걸치도록 위치를 정한다.
             first = 84 + 64 * activation.start
             last = 84 + 64 * activation.end
             if not is_closed(sequence, activation):
@@ -203,19 +213,20 @@ def draw_sequence(
     for row, message in enumerate(sequence.messages):
         start, end = columns[message.sender], columns[message.receiver]
         if start != end:
-            # 활성 중인 쪽은 생명선 중심이 아니라 활성 사각형의 바깥 변에서 만난다.
-            # 방향은 두 생명선의 원래 위치로 정한다.
+            # 메시지가 향하는 쪽으로 양 끝점을 각 참여자의 활성 깊이만큼 조정한다.
             rightward = end > start
             start += edge_offset(sequence, message.sender, row, rightward)
             end += edge_offset(sequence, message.receiver, row, not rightward)
         y = top + 84 + 64 * row
         pen = dashed if message.arrow.startswith("--") else QPen(Qt.GlobalColor.black)
+        # 자기 자신에게 보내는 메시지는 옆으로 나갔다 돌아오는 고리로 그린다.
         if start == end:
             turn = start + 48
             scene.addLine(start, y, turn, y, pen)
             scene.addLine(turn, y, turn, y + 16, pen)
             start, y = turn, y + 16
         scene.addLine(start, y, end, y, pen)
+        # 화살표 종류에 맞는 끝 모양(채운 삼각형, 열린 화살촉, X)을 그린다.
         direction = 1 if end > start else -1
         back = end - direction * 9
         if message.arrow.endswith(">>"):
@@ -239,6 +250,8 @@ def draw_sequence(
 
 
 class SequenceRenderer(DiagramRenderer):
+    """시퀀스 다이어그램을 그리고, 참여자 이동을 원문의 선언 순서 변경으로 반영한다."""
+
     diagram_type = "sequence"
 
     def render(
@@ -248,6 +261,7 @@ class SequenceRenderer(DiagramRenderer):
         layout: Layout,
         signals: DiagramSignals,
     ) -> None:
+        """시퀀스 모델을 장면에 다시 그리고 선택했던 참여자의 선택을 되살린다."""
         if not isinstance(diagram, SequenceDocument):
             raise TypeError("시퀀스 모델이 필요합니다.")
         selected = {item.data(0) for item in scene.selectedItems()}
@@ -261,7 +275,7 @@ class SequenceRenderer(DiagramRenderer):
     def moved_code(
         self, code: str, diagram: Diagram, node_id: str, x: float, y: float
     ) -> str | None:
-        # 시퀀스에서는 layout에 아무것도 저장하지 않고 코드만 고친다.
+        """참여자를 옮긴 결과를 선언 순서가 바뀐 새 원문으로 돌려준다."""
         if not isinstance(diagram, SequenceDocument) or not node_id.startswith(
             "sequence:"
         ):
