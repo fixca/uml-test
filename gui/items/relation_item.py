@@ -39,7 +39,7 @@ HEAD_HALF_WIDTH = 7.0
 
 
 def _boundary(box: QRectF, toward: QPointF) -> QPointF:
-    """중심에서 toward로 향하는 광선과 박스 외곽의 교점."""
+    """박스 중심에서 toward 쪽으로 그은 선이 박스 테두리와 만나는 점을 돌려준다."""
     center = box.center()
     dx, dy = toward.x() - center.x(), toward.y() - center.y()
     if dx == 0 and dy == 0:
@@ -52,7 +52,7 @@ def _boundary(box: QRectF, toward: QPointF) -> QPointF:
 
 
 class RelationLabel(QGraphicsSimpleTextItem):
-    """관계선이 글자를 가리지 않도록 라벨 뒤를 흰색으로 채운다."""
+    """관계선 위에 놓여도 읽을 수 있도록 뒤를 흰색으로 채운 글자 라벨."""
 
     def paint(
         self,
@@ -65,7 +65,7 @@ class RelationLabel(QGraphicsSimpleTextItem):
 
 
 class BendHandle(QGraphicsEllipseItem):
-    """선택한 관계의 경유점. 내보내기에는 조절점을 그리지 않는다."""
+    """선택한 관계선의 꺾임 조절점. 화면에만 보이고 내보낸 그림에는 나오지 않는다."""
 
     def paint(
         self,
@@ -78,9 +78,9 @@ class BendHandle(QGraphicsEllipseItem):
 
 
 class RelationItem(QGraphicsPathItem):
-    """파서가 정규화한 to 쪽에 삼각형·마름모·화살촉을 둔다.
+    """두 클래스 사이의 관계선을 종류에 맞는 UML 모양으로 그린다.
 
-    관계선과 라벨은 클래스 선택 ID를 갖지 않는다.
+    직선·직각선 표시와 꺾임 조절점 편집도 맡는다. 클래스 선택 ID는 갖지 않는다.
     """
 
     def __init__(
@@ -106,7 +106,7 @@ class RelationItem(QGraphicsPathItem):
         self.setToolTip(
             "선분 클릭: 임시 점 표시 / 점 드래그: 경유 위치 변경 / 우클릭: 꺾임 제거"
         )
-        # 클래스 박스 뒤에 선을 놓아 박스 내부를 가리지 않게 한다.
+        # 관계선이 클래스 박스 위로 겹쳐 보이지 않도록 박스 뒤에 둔다.
         self.setZValue(-1)
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
         pen = QPen(INK, 1.4)
@@ -119,7 +119,7 @@ class RelationItem(QGraphicsPathItem):
         self.update_geometry()
 
     def _route(self) -> list[QPointF]:
-        """장면 좌표로 시작점·꺾이는 점·끝점을 순서대로 반환한다."""
+        """관계선이 지나갈 점(시작점, 꺾이는 점, 끝점)을 장면 좌표로 돌려준다."""
         source = self.source.mapRectToScene(self.source.rect)
         target = self.target.mapRectToScene(self.target.rect)
         if self.bends:
@@ -129,7 +129,7 @@ class RelationItem(QGraphicsPathItem):
                 _boundary(target, self.bends[-1]),
             ]
         if self.source is self.target:
-            # 자기 관계는 외부 루프가 있어야 보인다. 두 모드 모두 루프로 표시한다.
+            # 자기 자신으로 가는 관계는 박스 바깥을 도는 고리로 그린다.
             start = QPointF(source.right(), source.center().y())
             end = QPointF(source.center().x(), source.top())
             return [
@@ -147,8 +147,7 @@ class RelationItem(QGraphicsPathItem):
 
         dx = target.center().x() - source.center().x()
         dy = target.center().y() - source.center().y()
-        # 중심 거리만 보면 넓은 박스의 안쪽으로 선이 되돌아갈 수 있다.
-        # 실제 박스 사이에 빈 공간이 있는 축을 우선해 연결한다.
+        # 직각선이 박스 안쪽을 지나지 않도록 박스 사이에 빈 공간이 있는 축으로 연결한다.
         horizontal_gap = (
             source.right() < target.left() or target.right() < source.left()
         )
@@ -177,8 +176,8 @@ class RelationItem(QGraphicsPathItem):
         ]
 
     def update_geometry(self) -> None:
-        """F4에서 이동 중 호출할 수 있는 경로 갱신 함수."""
-        # 갱신할 때 이전 머리와 라벨이 중복해서 남지 않도록 제거한다.
+        """클래스 위치나 꺾임이 바뀔 때 선, 화살표 머리, 라벨, 조절점을 다시 만든다."""
+        # 이전에 그린 머리와 라벨이 겹쳐 남지 않도록 먼저 지운다.
         for item in self.decorations:
             item.setParentItem(None)
             if item.scene() is not None:
@@ -192,7 +191,7 @@ class RelationItem(QGraphicsPathItem):
         if len(points) < 2:
             return
 
-        # from_→to 순서의 경로. UML 종류에 따라 머리를 둘 끝점이 다르다.
+        # 관계 종류에 맞는 화살표 머리를 알맞은 끝에 붙인다.
         kind = self.relation.kind
         if kind in ("inheritance", "realization"):
             self._head(points[-1], points[-2], "triangle")
@@ -222,7 +221,7 @@ class RelationItem(QGraphicsPathItem):
             self.decorations.append(handle)
 
     def preview_point(self) -> QPointF | None:
-        """저장하지 않은 조절점의 현재 선분 중점."""
+        """확정 전 임시 조절점(클릭한 선분의 중점)의 위치를 돌려준다. 없으면 None."""
         if self.pending_segment is None:
             return None
         route = self._route()
@@ -234,6 +233,7 @@ class RelationItem(QGraphicsPathItem):
     def itemChange(
         self, change: QGraphicsItem.GraphicsItemChange, value: object
     ) -> object:
+        """선택이 바뀌면 조절점 표시를 맞추고, 선택이 풀리면 임시 조절점을 지운다."""
         if change == QGraphicsItem.GraphicsItemChange.ItemSelectedHasChanged:
             if not value:
                 self.pending_segment = None
@@ -243,11 +243,12 @@ class RelationItem(QGraphicsPathItem):
     def _head(
         self, tip: QPointF, previous: QPointF, shape: str, filled: bool = False
     ) -> None:
+        """선 끝 tip에 삼각형·마름모·열린 화살촉 중 하나를 선 방향에 맞춰 그린다."""
         vector = previous - tip
         length = hypot(vector.x(), vector.y())
         if length == 0:
             return
-        # 선 방향과 그 수직 방향을 이용하면 대각선에서도 머리가 회전한다.
+        # 선이 대각선이어도 머리가 선 방향에 맞춰 기울어지게 그린다.
         unit = vector / length
         normal = QPointF(-unit.y(), unit.x())
         base = tip + unit * HEAD_LENGTH
@@ -275,7 +276,7 @@ class RelationItem(QGraphicsPathItem):
     def _multiplicity(
         self, text: str | None, endpoint: QPointF, node: ClassItem
     ) -> None:
-        """글자 가장자리를 클래스 경계에서 6px 띄워 끝점 옆에 둔다."""
+        """다중성 글자를 관계선 끝점 옆, 클래스 경계에서 조금 띄운 자리에 놓는다."""
         if not text:
             return
         item = RelationLabel(text, self)
@@ -306,7 +307,7 @@ class RelationItem(QGraphicsPathItem):
 
     @staticmethod
     def _midpoint(points: list[QPointF]) -> QPointF:
-        """꺾은 선 전체 길이의 절반 지점. 두 끝점의 평균과는 다르다."""
+        """꺾은 선을 따라 전체 길이의 절반이 되는 지점을 돌려준다. (라벨을 놓을 자리)"""
         lengths = [hypot((b - a).x(), (b - a).y()) for a, b in pairwise(points)]
         remaining = sum(lengths) / 2
         for start, end, length in zip(points, points[1:], lengths):
@@ -316,6 +317,7 @@ class RelationItem(QGraphicsPathItem):
         return points[0]
 
     def _label(self, text: str | None, center: QPointF) -> None:
+        """관계 이름 라벨을 center를 가운데로 하여 놓는다."""
         if not text:
             return
         item = RelationLabel(text, self)
@@ -327,7 +329,7 @@ class RelationItem(QGraphicsPathItem):
     # ---------------------------------------------------------------- F4 상호작용
 
     def shape(self) -> QPainterPath:
-        """얇은 선 주변도 클릭할 수 있게 클릭 판정 폭을 넓힌다."""
+        """얇은 선과 선택된 조절점 주변도 클릭할 수 있도록 클릭 판정 영역을 넓힌다."""
         stroker = QPainterPathStroker()
         stroker.setWidth(10.0)
         shape = stroker.createStroke(self.path())
@@ -340,11 +342,11 @@ class RelationItem(QGraphicsPathItem):
         return shape
 
     def boundingRect(self) -> QRectF:
-        """넓힌 클릭 영역이 Qt의 후보 아이템 탐색에서도 포함되도록 한다."""
+        """넓힌 클릭 영역까지 포함한 그리기 범위를 돌려준다."""
         return super().boundingRect().adjusted(-8, -8, 8, 8)
 
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        """왼쪽 클릭만 받는다. 아직 선 모드나 layout은 변경하지 않는다."""
+        """왼쪽 클릭으로 관계선을 선택하고 조절점을 끌 준비를 한다."""
         self.pressed = event.button() == Qt.MouseButton.LeftButton
         if self.pressed:
             self.dragged = False
@@ -372,6 +374,7 @@ class RelationItem(QGraphicsPathItem):
             event.ignore()
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        """조절점을 끄는 동안 선을 다시 그린다."""
         if not self.pressed:
             event.ignore()
             return
@@ -400,6 +403,7 @@ class RelationItem(QGraphicsPathItem):
 
     @staticmethod
     def _segment_distance(point: QPointF, start: QPointF, end: QPointF) -> float:
+        """점에서 선분 start-end까지의 가장 짧은 거리를 돌려준다."""
         delta = end - start
         length_squared = delta.x() ** 2 + delta.y() ** 2
         offset = point - start
@@ -418,6 +422,7 @@ class RelationItem(QGraphicsPathItem):
         return hypot(distance.x(), distance.y())
 
     def _notify_bends(self) -> None:
+        """바뀐 꺾임 좌표를 컨트롤러에 알린다. 이벤트가 끝난 뒤 전달한다."""
         scene = self.scene()
         signals = getattr(scene, "signals", None)
         if signals is None:
@@ -435,6 +440,7 @@ class RelationItem(QGraphicsPathItem):
         QTimer.singleShot(0, notify_controller)
 
     def contextMenuEvent(self, event: QGraphicsSceneContextMenuEvent) -> None:
+        """우클릭하면 가장 가까운 꺾임 하나 또는 모든 꺾임을 지우는 메뉴를 보인다."""
         if not self.bends:
             event.ignore()
             return
@@ -461,7 +467,7 @@ class RelationItem(QGraphicsPathItem):
         event.accept()
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        """클릭은 가운데 조절점을 만들고, 점 드래그는 경유 위치를 저장한다."""
+        """클릭하면 임시 조절점을 만들고, 조절점을 끌었다면 새 꺾임 위치를 알린다."""
         if self.pressed and self.drag_index is not None and self.dragged:
             if event.screenPos() == event.buttonDownScreenPos(
                 Qt.MouseButton.LeftButton
@@ -485,7 +491,7 @@ class RelationItem(QGraphicsPathItem):
         event.accept()
         if not clicked:
             return
-        # 이미 있는 점을 클릭한 경우에는 경유점을 중복해서 만들지 않는다.
+        # 이미 있는 조절점을 클릭한 것이면 새 조절점을 만들지 않는다.
         if any(
             hypot((point - event.pos()).x(), (point - event.pos()).y()) <= 8
             for point in self.bends

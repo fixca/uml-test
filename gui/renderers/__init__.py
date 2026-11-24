@@ -14,6 +14,7 @@ FALLBACK = OtherDiagramRenderer()
 
 
 def renderer_for(diagram: Diagram) -> DiagramRenderer:
+    """모델 종류에 맞는 렌더러를 돌려준다. 등록되지 않은 종류는 안내용 렌더러를 쓴다."""
     return RENDERERS.get(diagram.type, FALLBACK)
 
 

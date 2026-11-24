@@ -59,7 +59,7 @@ def export_scene(
 
 
 def _export_rect(scene: QGraphicsScene) -> QRectF:
-    """그림이 차지하는 영역 + 여백. 빈 장면이면 여백만큼의 빈 그림."""
+    """내보낼 영역(그림 전체 + 사방 여백)을 돌려준다. 빈 장면이면 여백만 남긴다."""
     rect = scene.itemsBoundingRect()
     if rect.isEmpty():
         rect = QRectF(0, 0, 0, 0)
@@ -67,6 +67,7 @@ def _export_rect(scene: QGraphicsScene) -> QRectF:
 
 
 def _export_svg(scene: QGraphicsScene, source: QRectF, path: Path) -> None:
+    """그림을 글자가 벡터로 남는 SVG 파일로 저장한다."""
     width, height = round(source.width()), round(source.height())
     target = QRectF(0, 0, width, height)
 
@@ -89,6 +90,7 @@ def _export_svg(scene: QGraphicsScene, source: QRectF, path: Path) -> None:
 def _export_image(
     scene: QGraphicsScene, source: QRectF, path: Path, fmt: str, scale: float
 ) -> None:
+    """그림을 scale 배로 그려 PNG 또는 JPEG 파일로 저장한다."""
     width = max(1, round(source.width() * scale))
     height = max(1, round(source.height() * scale))
 
@@ -107,7 +109,7 @@ def _export_image(
         painter.end()
 
     if fmt == "jpeg":
-        image = image.convertToFormat(QImage.Format.Format_RGB32)  # JPEG 는 알파 없음
+        image = image.convertToFormat(QImage.Format.Format_RGB32)  # 투명 영역 없이 저장
         ok = image.save(str(path), "JPEG", JPEG_QUALITY)
     else:
         ok = image.save(str(path), "PNG")

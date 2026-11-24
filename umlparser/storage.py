@@ -117,6 +117,7 @@ def save(project: Project, path: str) -> None:
 
 
 def _layout_to_dict(layout: Layout) -> dict[str, Any]:
+    """배치를 JSON에 쓸 수 있는 dict로 바꾼다. 꺾임이 없으면 bends 키는 생략한다."""
     return {
         "nodes": {class_id: [x, y] for class_id, (x, y) in layout.nodes.items()},
         "edges": dict(layout.edges),
@@ -134,9 +135,9 @@ def _layout_to_dict(layout: Layout) -> dict[str, Any]:
 
 
 def _model_dict(code: str) -> dict[str, Any] | None:
-    """parse(code).to_dict().
+    """프로젝트 파일에 함께 저장할 모델 사본을 만든다.
 
-    파서가 아직 stub(NotImplementedError)이면 None 을 저장한다.
+    파서가 아직 구현되지 않았으면 None 을 돌려준다.
     """
     try:
         return parse(code).to_dict()
@@ -185,6 +186,7 @@ def load(path: str) -> Project:
 
 
 def _layout_from_dict(data: Any) -> Layout:
+    """파일에서 읽은 배치 데이터를 검사해 Layout으로 바꾼다. 틀리면 StorageError."""
     if data is None:
         return Layout()
     if not isinstance(data, dict):
@@ -237,6 +239,7 @@ def _layout_from_dict(data: Any) -> Layout:
 
 
 def _is_number(value: Any) -> bool:
+    """bool을 제외한 숫자인지 알려 준다."""
     return isinstance(value, int | float) and not isinstance(value, bool)
 
 
@@ -284,6 +287,7 @@ def _read_settings(settings: Path) -> dict[str, Any]:
 
 
 def _settings_path() -> Path:
+    """운영체제별 사용자 설정 폴더의 settings.json 경로를 돌려준다."""
     if sys.platform == "win32":
         appdata = os.environ.get("APPDATA")
         base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"

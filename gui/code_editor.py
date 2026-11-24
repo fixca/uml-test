@@ -50,6 +50,7 @@ class CodeEditor(QPlainTextEdit):
         )
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        """Undo·Redo 단축키는 편집기 대신 앱 전체의 Undo·Redo 요청으로 보낸다."""
         if event.matches(QKeySequence.StandardKey.Undo):
             self.undo_requested.emit()
             event.accept()
@@ -66,7 +67,8 @@ class CodeEditor(QPlainTextEdit):
         text = source.text().replace("\r\n", "\n").replace("\r", "\n")
         cursor = self.textCursor()
         cursor.beginEditBlock()
-        # 선택한 원문도 보존하고 선택 영역의 마지막 줄 다음에 붙인다.
+        # 선택한 원문을 지우지 않도록 선택 영역의 마지막 줄 뒤에 붙인다.
+        # 그 줄에 내용이 있으면 다음 줄에, 비었거나 공백뿐이면 그 줄에 붙인다.
         cursor.setPosition(cursor.selectionEnd())
         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
         if cursor.block().text().strip():
@@ -83,10 +85,12 @@ class CodeEditor(QPlainTextEdit):
         self.setTextCursor(cursor)
 
     def update_margin(self, count: int = 0) -> None:
+        """줄 번호가 들어갈 왼쪽 여백을 줄 수에 맞춰 넓히거나 좁힌다."""
         self.setViewportMargins(self.number_width(), 0, 0, 0)
         self.update_numbers_geometry()
 
     def update_numbers(self, rect: QRect, dy: int) -> None:
+        """편집기가 스크롤되거나 갱신될 때 줄 번호 영역도 함께 갱신한다."""
         if dy:
             self.numbers.scroll(0, dy)
         else:
@@ -105,6 +109,7 @@ class CodeEditor(QPlainTextEdit):
         )
 
     def paint_numbers(self, event: QPaintEvent) -> None:
+        """화면에 보이는 줄마다 줄 번호를 그린다."""
         painter = QPainter(self.numbers)
         painter.fillRect(event.rect(), self.palette().color(QPalette.ColorRole.Window))
         painter.setPen(self.palette().color(QPalette.ColorRole.WindowText))
@@ -127,6 +132,7 @@ class CodeEditor(QPlainTextEdit):
             block = block.next()
 
     def set_errors(self, errors: list[ParseError]) -> None:
+        """오류가 있는 줄에 물결 밑줄을 긋고 오류 메시지를 툴팁으로 보여 준다."""
         selections = []
         for line in sorted({error.line for error in errors}):
             block = self.document().findBlockByNumber(line - 1)
@@ -152,6 +158,7 @@ class CodeEditor(QPlainTextEdit):
         self.setToolTip("\n".join(f"{e.line}번째 줄: {e.message}" for e in errors))
 
     def goto_line(self, line: int) -> None:
+        """지정한 줄(범위 밖이면 가까운 줄)로 커서를 옮기고 화면 가운데에 보인다."""
         block = self.document().findBlockByNumber(
             max(1, min(line, self.blockCount())) - 1
         )

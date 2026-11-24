@@ -19,7 +19,7 @@ class OtherDiagramRenderer(DiagramRenderer):
     ) -> None:
         """안내 문구만 그리고 NotImplementedError를 던진다."""
         message = f"'{diagram.type}' 다이어그램은 아직 지원하지 않습니다."
-        # 이전 종류의 그림이 남지 않게 먼저 지운다.
+        # 이전 다이어그램의 그림이 남지 않도록 장면을 비운다.
         scene.clear()
         text = scene.addSimpleText(message)
         text.setBrush(QBrush(QColor("#64748b")))

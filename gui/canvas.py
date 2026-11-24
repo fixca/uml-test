@@ -18,6 +18,7 @@ class DiagramScene(QGraphicsScene):
         self.signals = DiagramSignals(self)
 
     def selected_class_ids(self) -> list[str]:
+        """선택된 항목의 ID(클래스 ID, 시퀀스 참여자 키)를 중복 없이 돌려준다."""
         return list(
             dict.fromkeys(
                 item.data(0)
@@ -37,7 +38,10 @@ class DiagramView(QGraphicsView):
         self.pan_position: QPoint | None = None
 
     def center_canvas(self, point: QPointF) -> None:
-        # 화면 여백은 뷰에서만 관리해 내보내는 그림의 크기를 유지한다.
+        """지정한 장면 좌표가 화면 가운데에 오도록 이동한다.
+
+        이동할 여백은 뷰에만 더해 내보내는 그림의 크기는 바뀌지 않는다.
+        """
         visible = self.mapToScene(self.viewport().rect()).boundingRect()
         margin = QRectF(visible)
         margin.moveCenter(point)
@@ -55,6 +59,7 @@ class DiagramView(QGraphicsView):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        """가운데 버튼을 누른 채 끌면 그림 주변 여백 안에서 화면을 이동한다."""
         if self.pan_position is not None:
             position = event.position().toPoint()
             center = self.viewport().rect().center()
@@ -87,6 +92,7 @@ class DiagramView(QGraphicsView):
         super().mouseReleaseEvent(event)
 
     def zoom_by(self, steps: float, anchor: QPoint | None = None) -> None:
+        """단계만큼 확대·축소하고 anchor(없으면 화면 중심) 아래 위치를 유지한다."""
         current = self.transform().m11()
         target = max(0.1, min(4.0, current * 1.2 ** max(-32, min(32, steps))))
         if target == current:
@@ -98,6 +104,7 @@ class DiagramView(QGraphicsView):
         self.center_canvas(before + (self.mapToScene(center) - self.mapToScene(anchor)))
 
     def wheelEvent(self, event: QWheelEvent) -> None:
+        """Ctrl+휠로 확대·축소하고, 그 외 휠은 기본 스크롤을 따른다."""
         if not event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             super().wheelEvent(event)
             return

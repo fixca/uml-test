@@ -52,9 +52,11 @@ class ExportDialog(QDialog):
         form.addRow(buttons)
 
     def format_changed(self, index: int) -> None:
+        """SVG는 배율이 필요 없으므로 래스터 형식일 때만 배율 선택을 켠다."""
         self.scales.setEnabled(index != 0)
 
     def options(self) -> tuple[str, float]:
+        """선택한 내보내기 형식과 배율을 돌려준다. SVG의 배율은 항상 1이다."""
         fmt = self.formats.currentText().lower()
         scale = (1.0, 2.0, 4.0)[self.scales.currentIndex()] if fmt != "svg" else 1.0
         return fmt, scale
@@ -130,6 +132,7 @@ class MainWindow(QMainWindow):
         self.editor.numbers.update()
 
     def create_menus(self) -> None:
+        """파일·편집·보기 메뉴와 단축키를 만들고 각 항목을 동작에 연결한다."""
         file_menu = self.menuBar().addMenu("파일")
         edit_menu = self.menuBar().addMenu("편집")
         view_menu = self.menuBar().addMenu("보기")
@@ -204,7 +207,7 @@ class MainWindow(QMainWindow):
             + QKeySequence.keyBindings(QKeySequence.StandardKey.Redo)
         )
 
-        # 숫자패드 없이 = / - 키로 확대·축소한다. 기존 표준 키도 유지한다.
+        # 숫자패드가 없어도 Ctrl+= / Ctrl+- 로 확대·축소하고 표준 키도 유지한다.
         for name, shortcuts in (
             ("zoom_in", ["Ctrl+=", "Ctrl++", "Ctrl+Shift+=", "Ctrl+Shift++"]),
             ("zoom_out", ["Ctrl+-"]),
@@ -216,6 +219,7 @@ class MainWindow(QMainWindow):
             self.actions[name].setShortcuts(list(unique.values()))
 
     def update_state(self) -> None:
+        """창 제목과 Undo·Redo·내보내기 메뉴의 사용 가능 여부를 현재 상태에 맞춘다."""
         controller = self.controller
         name = (
             Path(controller.project.path).name
@@ -233,6 +237,7 @@ class MainWindow(QMainWindow):
         self.actions["export"].setEnabled(controller.valid and controller.rendered)
 
     def confirm_discard(self) -> bool:
+        """미저장 변경이 있으면 저장 여부를 물어, 현재 작업을 닫아도 되는지 돌려준다."""
         if not self.controller.dirty:
             return True
         box = QMessageBox(self)
@@ -254,11 +259,13 @@ class MainWindow(QMainWindow):
         return result == QMessageBox.StandardButton.Discard
 
     def new_file(self) -> None:
+        """변경 사항을 정리한 뒤 예시 원문이 든 새 문서로 바꾼다."""
         if self.confirm_discard():
             self.controller.set_project(storage.new_project())
             self.remember_path("")
 
     def open_file(self) -> None:
+        """파일 선택 창에서 고른 프로젝트를 연다."""
         path, _ = QFileDialog.getOpenFileName(
             self, "프로젝트 열기", "", "UML (*.umlproj)"
         )
@@ -266,6 +273,7 @@ class MainWindow(QMainWindow):
             self.load_path(path)
 
     def load_path(self, path: str) -> bool:
+        """지정한 경로의 프로젝트를 연다. 실패하면 오류 창을 띄우고 False를 돌려준다."""
         try:
             project = storage.load(path)
         except storage.StorageError as error:
@@ -276,15 +284,18 @@ class MainWindow(QMainWindow):
         return True
 
     def remember_path(self, path: str) -> None:
+        """다음 실행 때 다시 열 수 있도록 마지막으로 연 파일 경로를 기록한다."""
         try:
             storage.set_last_path(path)
         except storage.StorageError as error:
             self.statusBar().showMessage(f"최근 파일 기록 실패: {error}")
 
     def save_as(self) -> bool:
+        """항상 저장 경로를 새로 물어 프로젝트를 저장한다."""
         return self.save_file(force_dialog=True)
 
     def save_file(self, checked: bool = False, *, force_dialog: bool = False) -> bool:
+        """프로젝트를 저장하고 성공 여부를 돌려준다. 경로가 없으면 먼저 묻는다."""
         self.controller.flush()
         path = self.controller.project.path
         if force_dialog or not path:
@@ -306,6 +317,7 @@ class MainWindow(QMainWindow):
         return True
 
     def export_file(self) -> None:
+        """현재 그림을 사용자가 고른 형식과 배율로 파일에 내보낸다."""
         self.controller.flush()
         if not self.controller.valid or not self.controller.rendered:
             return
@@ -319,6 +331,7 @@ class MainWindow(QMainWindow):
         dialog.setDefaultSuffix(fmt)
         if not dialog.exec():
             return
+        # 선택 표시가 내보낸 그림에 나오지 않도록 잠시 해제했다가 되돌린다.
         selection = self.scene.selectedItems()
         self.scene.clearSelection()
         try:
@@ -332,6 +345,7 @@ class MainWindow(QMainWindow):
                 item.setSelected(True)
 
     def copy(self) -> None:
+        """편집기에서는 글자를, 그림에서는 선택한 클래스 하나를 복사한다."""
         if self.editor.hasFocus():
             self.editor.copy()
             return
@@ -346,6 +360,10 @@ class MainWindow(QMainWindow):
             self.copy_origin = (block, position)
 
     def delete(self) -> None:
+        """편집기에서는 선택한 글자(선택이 없으면 커서 뒤 한 글자)를 지운다.
+
+        그림에서는 선택한 항목을 지운다.
+        """
         if self.editor.hasFocus():
             cursor = self.editor.textCursor()
             cursor.deleteChar()
@@ -354,6 +372,10 @@ class MainWindow(QMainWindow):
         self.controller.delete_selected()
 
     def paste(self) -> None:
+        """편집기에서는 글자를, 그림에서는 클립보드의 클래스를 붙여넣는다.
+
+        같은 블록을 거듭 붙이면 이전 붙인 위치에서 조금씩 비껴 놓는다.
+        """
         if self.editor.hasFocus():
             self.editor.paste()
             return
@@ -375,12 +397,14 @@ class MainWindow(QMainWindow):
         self.view.zoom_by(-1)
 
     def fit_view(self) -> None:
+        """그려진 모든 요소가 보이도록 화면 배율과 위치를 맞춘다."""
         if not self.scene.itemsBoundingRect().isEmpty():
             self.view.fitInView(
                 self.scene.itemsBoundingRect(), Qt.AspectRatioMode.KeepAspectRatio
             )
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        """미저장 변경을 확인한 뒤에만 창을 닫는다."""
         if self.confirm_discard():
             self.controller.timer.stop()
             event.accept()

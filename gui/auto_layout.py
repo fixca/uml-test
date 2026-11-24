@@ -17,9 +17,12 @@ MARGIN = 40.0
 
 
 def _layers(diagram: ClassDiagram) -> dict[str, int]:
-    """순환 상속은 같은 그룹으로 묶은 뒤 부모→자식 순으로 층을 계산한다."""
+    """부모가 위, 자식이 아래에 오도록 클래스별 배치 층을 정한다.
+
+    순환 상속에 얽힌 클래스는 같은 층에 둔다.
+    """
     ids = list(dict.fromkeys(node.id for node in diagram.classes))
-    # 모델의 상속·구현은 from_=자식, to=부모로 정규화되어 있다.
+    # 부모에서 자식으로 향하는 상속·구현 관계만 모은다. (from_=자식, to=부모)
     children = {class_id: set() for class_id in ids}
     for relation in diagram.relations:
         if (
@@ -29,7 +32,7 @@ def _layers(diagram: ClassDiagram) -> dict[str, int]:
         ):
             children[relation.to].add(relation.from_)
 
-    # 각 노드에서 도달 가능한 노드를 구해 순환 관계를 찾는다.
+    # 같은 층에 놓아야 할 순환 관계를 찾기 위해 클래스별 하위 클래스 전체를 구한다.
     reachable = {}
     for start in ids:
         seen, pending = set(), [start]
@@ -40,7 +43,7 @@ def _layers(diagram: ClassDiagram) -> dict[str, int]:
                 pending.extend(children[current] - seen)
         reachable[start] = seen
 
-    # 서로 도달할 수 있는 노드들은 같은 층에서 처리할 그룹으로 묶는다.
+    # 서로 상속하는 순환 클래스들을 하나의 배치 그룹으로 묶는다.
     groups, group_of = [], {}
     for class_id in ids:
         if class_id in group_of:
@@ -54,7 +57,7 @@ def _layers(diagram: ClassDiagram) -> dict[str, int]:
             group_of[member] = len(groups)
         groups.append(members)
 
-    # 그룹 사이의 관계만 남기면 순환이 사라져 부모부터 순서대로 처리할 수 있다.
+    # 그룹 사이의 부모→자식 순서를 정리한다. (그룹 안의 순환은 이미 묶여 사라진다.)
     outgoing = [set() for _ in groups]
     indegree = [0] * len(groups)
     for parent, targets in children.items():
@@ -63,7 +66,7 @@ def _layers(diagram: ClassDiagram) -> dict[str, int]:
             if source != target and target not in outgoing[source]:
                 outgoing[source].add(target)
                 indegree[target] += 1
-    # 여러 부모가 있으면 가장 깊은 부모보다 한 층 아래에 배치한다.
+    # 자식 그룹을 모든 부모 그룹보다 아래 층에 놓는다.
     levels = [0] * len(groups)
     ready = deque(i for i, degree in enumerate(indegree) if degree == 0)
     while ready:
@@ -79,15 +82,18 @@ def _layers(diagram: ClassDiagram) -> dict[str, int]:
 def fill_missing_positions(
     diagram: ClassDiagram, layout: Layout, sizes: dict[str, tuple[float, float]]
 ) -> None:
-    """sizes는 실제 박스 크기. 수동 배치 박스와 겹치는 격자는 건너뛴다."""
+    """좌표가 없는 클래스에만 다른 박스와 겹치지 않는 격자 위치를 정해 준다.
+
+    sizes는 클래스별 실제 박스 크기이고, 이미 있는 수동 좌표는 바꾸지 않는다.
+    """
     if not sizes:
         return
     levels = _layers(diagram)
     columns = max(1, ceil(sqrt(len(sizes))))
-    # 가장 큰 박스를 기준으로 격자 간격을 잡는다.
+    # 가장 큰 클래스도 들어가도록 격자 칸 크기를 정한다.
     cell_width = max(width for width, _ in sizes.values()) + GAP_X
     cell_height = max(height for _, height in sizes.values()) + GAP_Y
-    # 현재 모델에 있는 수동 배치 박스만 충돌 검사에 포함한다.
+    # 이미 좌표가 있는 클래스 영역을 새 박스가 피해야 할 자리로 예약한다.
     occupied = [
         (x, y, x + sizes[key][0], y + sizes[key][1])
         for key, (x, y) in layout.nodes.items()
@@ -101,7 +107,7 @@ def fill_missing_positions(
             if key in layout.nodes:
                 continue
             width, height = sizes[key]
-            # 수동 박스와 겹치는 칸은 건너뛰고 다음 빈 칸을 찾는다.
+            # 예약된 영역과 겹치지 않는 빈 칸을 찾는다.
             while True:
                 x = MARGIN + (slot % columns) * cell_width
                 y = MARGIN + (row + slot // columns) * cell_height
@@ -114,7 +120,7 @@ def fill_missing_positions(
                     for left, top, right, bottom in occupied
                 ):
                     break
-            # 저장·Undo·복사 위치에 반영되도록 전달받은 layout에 직접 기록한다.
+            # 자동 배치한 좌표도 저장·Undo에 반영되도록 layout에 기록한다.
             layout.nodes[key] = (x, y)
             occupied.append((x, y, x + width, y + height))
         row += max(1, ceil(slot / columns))
