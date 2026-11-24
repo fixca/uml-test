@@ -59,6 +59,14 @@ class CodeEditor(QPlainTextEdit):
         elif event.matches(QKeySequence.StandardKey.Redo):
             self.redo_requested.emit()
             event.accept()
+        elif event.key() == Qt.Key.Key_Tab and (
+            event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+        ):
+            # Shift+Tab은 Key_Backtab과 같게 처리해 입력 형태에 따른 차이를 없앤다.
+            super().keyPressEvent(
+                QKeyEvent(event.type(), Qt.Key.Key_Backtab, event.modifiers())
+            )
+            event.accept()
         elif event.key() == Qt.Key.Key_Tab and not event.modifiers() & (
             Qt.KeyboardModifier.ControlModifier
             | Qt.KeyboardModifier.AltModifier

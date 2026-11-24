@@ -237,3 +237,17 @@ def test_closing_brace_skip_is_logical_in_rtl_line(app: QApplication) -> None:
     QTest.keyClicks(editor, "}")
     assert editor.toPlainText() == "אבג{}"
     assert editor.textCursor().position() == 5
+
+
+def test_shift_tab_does_not_insert_spaces(app: QApplication) -> None:
+    editor = CodeEditor()
+    QTest.keyClick(editor, Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
+    assert editor.toPlainText() == ""
+
+
+def test_shift_tab_keeps_selection_text(app: QApplication) -> None:
+    editor = CodeEditor()
+    editor.setPlainText("abc")
+    editor.selectAll()
+    QTest.keyClick(editor, Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
+    assert editor.toPlainText() == "abc"
