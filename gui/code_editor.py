@@ -17,6 +17,8 @@ from PyQt6.QtWidgets import QPlainTextEdit, QTextEdit, QWidget
 
 from umlparser.model import ParseError
 
+INDENT = "    "
+
 
 class LineNumbers(QWidget):
     def __init__(self, editor: "CodeEditor") -> None:
@@ -57,8 +59,73 @@ class CodeEditor(QPlainTextEdit):
         elif event.matches(QKeySequence.StandardKey.Redo):
             self.redo_requested.emit()
             event.accept()
+        elif event.key() == Qt.Key.Key_Tab and (
+            event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+        ):
+            # Shift+Tab은 Key_Backtab과 같게 처리해 입력 형태에 따른 차이를 없앤다.
+            super().keyPressEvent(
+                QKeyEvent(event.type(), Qt.Key.Key_Backtab, event.modifiers())
+            )
+            event.accept()
+        elif event.key() == Qt.Key.Key_Tab and not event.modifiers() & (
+            Qt.KeyboardModifier.ControlModifier
+            | Qt.KeyboardModifier.AltModifier
+            | Qt.KeyboardModifier.MetaModifier
+        ):
+            self.textCursor().insertText(INDENT)
+            event.accept()
+        elif (
+            event.key() == Qt.Key.Key_Backspace
+            and not event.modifiers()
+            and self.delete_indent()
+        ):
+            event.accept()
+        elif event.text() == "{":
+            self.insert_brace_pair()
+            event.accept()
+        elif event.text() == "}" and self.skip_closing_brace():
+            event.accept()
         else:
             super().keyPressEvent(event)
+
+    def delete_indent(self) -> bool:
+        """커서 앞이 같은 줄의 공백 4칸이면 한 번에 지우고 True를 돌려준다."""
+        cursor = self.textCursor()
+        if cursor.hasSelection() or cursor.positionInBlock() < len(INDENT):
+            return False
+        start = cursor.position() - len(INDENT)
+        if (
+            cursor.block().text()[cursor.positionInBlock() - len(INDENT) :][
+                : len(INDENT)
+            ]
+            != INDENT
+        ):
+            return False
+        cursor.setPosition(start, QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        self.setTextCursor(cursor)
+        return True
+
+    def insert_brace_pair(self) -> None:
+        """`{`를 입력하면 `}`를 함께 넣고 커서를 둘 사이에 둔다."""
+        cursor = self.textCursor()
+        selected = cursor.selectedText()
+        cursor.beginEditBlock()
+        cursor.insertText("{" + selected + "}")
+        cursor.movePosition(QTextCursor.MoveOperation.PreviousCharacter)
+        cursor.endEditBlock()
+        self.setTextCursor(cursor)
+
+    def skip_closing_brace(self) -> bool:
+        """커서 바로 뒤가 `}`이면 새로 넣지 않고 한 칸 건너뛴다."""
+        cursor = self.textCursor()
+        if cursor.hasSelection():
+            return False
+        if self.document().characterAt(cursor.position()) != "}":
+            return False
+        cursor.movePosition(QTextCursor.MoveOperation.NextCharacter)
+        self.setTextCursor(cursor)
+        return True
 
     def insertFromMimeData(self, source: QMimeData) -> None:
         """붙여넣은 코드가 현재 문장과 합쳐지지 않도록 별도 줄에 삽입한다."""
