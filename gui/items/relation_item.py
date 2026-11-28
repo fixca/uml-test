@@ -368,6 +368,13 @@ class RelationItem(QGraphicsPathItem):
             )
             self.original_bends = [QPointF(point) for point in self.bends]
             self.original_pending = self.pending_segment
+            scene = self.scene()
+            if scene is not None and not (
+                event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            ):
+                for item in scene.selectedItems():
+                    if item is not self:
+                        item.setSelected(False)
             self.setSelected(True)
             event.accept()
         else:
